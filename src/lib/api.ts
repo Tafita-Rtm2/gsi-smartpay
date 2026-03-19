@@ -8,7 +8,6 @@ export interface DBStudent {
   prenom?: string;
   email?: string;
   matricule?: string;
-  photo?: string;
   contact?: string;
   telephone?: string;
   campus?: string;
