@@ -71,7 +71,7 @@ export interface DBPaiement {
 
 // ─── Parse response ───────────────────────────────────────────────────────────
 
-function parseArray<T>(data: unknown): T[] {
+function parseArray<T>(data: Record<string, unknown> | unknown[]): T[] {
   if (!data) return [];
   if (Array.isArray(data)) return data as T[];
   for (const key of ["data","documents","results","items","records","list"]) {
