@@ -1,16 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, ChevronDown, CreditCard, RefreshCw } from "lucide-react";
+import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
 import clsx from "clsx";
+import { ETABLISSEMENTS } from "@/lib/data";
 
-const MODES = ["especes", "MVola", "Orange Money", "Airtel Money", "virement"];
-const STATUT_COLORS: Record<string, string> = {
-  paye: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-  impaye: "bg-red-100 text-red-700 border border-red-200",
-  en_attente: "bg-amber-100 text-amber-700 border border-amber-200",
-};
+const MODES = ["Especes", "Cheque", "Virement bancaire", "Recu de banque"];
+const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
 export default function PaiementsPage() {
   const { currentUser } = useAuth();
@@ -23,34 +20,36 @@ export default function PaiementsPage() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Student selector state
+  const [studentSearch, setStudentSearch] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<DBStudent | null>(null);
+  const [showStudentPicker, setShowStudentPicker] = useState(false);
+  const [filiereFilter, setFiliereFilter] = useState("Toutes");
+
   const [form, setForm] = useState({
-    etudiantId: "",
-    montant: "",
+    montant: "", mois: MOIS[new Date().getMonth()],
+    annee: new Date().getFullYear().toString(),
     date: new Date().toISOString().split("T")[0],
-    mode: "especes",
-    note: "",
+    mode: "Especes", note: "",
   });
 
   const isAdmin = currentUser?.role === "admin";
+  const etabInfo = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
+  const etabColor = etabInfo?.color || "#2563eb";
 
   const load = useCallback(async () => {
     setLoading(true);
     const [p, s, e] = await Promise.all([fetchPaiements(), fetchStudents(), fetchEcolages()]);
-    // Filter by campus if not admin
     if (!isAdmin && currentUser) {
       const myEtab = currentUser.etablissement;
-      const myCampusStudents = s.filter(st => {
-        const campus = (st.campus || "").toLowerCase();
-        return campus.includes(myEtab) || campus.includes(myEtab.slice(0, 4));
-      });
-      const myIds = new Set(myCampusStudents.map(st => getStudentId(st)));
+      const myStudents = s.filter(st => (st.campus || "").toLowerCase().includes(myEtab));
+      const myIds = new Set(myStudents.map(st => getStudentId(st)));
       setPaiements(p.filter(pay => myIds.has(pay.etudiantId)));
-      setStudents(myCampusStudents);
+      setStudents(myStudents);
       setEcolages(e.filter(ec => myIds.has(ec.etudiantId)));
     } else {
-      setPaiements(p);
-      setStudents(s);
-      setEcolages(e);
+      setPaiements(p); setStudents(s); setEcolages(e);
     }
     setLoading(false);
   }, [isAdmin, currentUser]);
@@ -64,34 +63,43 @@ export default function PaiementsPage() {
     return matchSearch && matchMode;
   });
 
+  // Student picker filter
+  const filieres = etabInfo ? etabInfo.filieres : [];
+  const filteredStudents = students.filter(s => {
+    const q = studentSearch.toLowerCase();
+    const name = getStudentName(s).toLowerCase();
+    const matchSearch = name.includes(q) || (s.matricule || "").toLowerCase().includes(q);
+    const matchFiliere = filiereFilter === "Toutes" || s.filiere === filiereFilter;
+    return matchSearch && matchFiliere;
+  });
+
   const totalEncaisse = paiements.reduce((s, p) => s + p.montant, 0);
 
   const handleAdd = async () => {
     setFormError("");
-    const student = students.find(s => getStudentId(s) === form.etudiantId);
-    if (!student) { setFormError("Veuillez selectionner un etudiant"); return; }
+    if (!selectedStudent) { setFormError("Veuillez selectionner un etudiant"); return; }
     if (!form.montant || Number(form.montant) <= 0) { setFormError("Montant invalide"); return; }
     setSaving(true);
 
-    // Create payment
+    const note = `${form.mois} ${form.annee}${form.note ? " — " + form.note : ""}`;
+
     const newPay = await createPaiement({
-      etudiantId: getStudentId(student),
-      etudiantNom: getStudentName(student),
-      matricule: student.matricule,
-      campus: student.campus || currentUser?.etablissement || "",
-      filiere: student.filiere || "",
-      classe: student.niveau || "L1",
+      etudiantId: getStudentId(selectedStudent),
+      etudiantNom: getStudentName(selectedStudent),
+      matricule: selectedStudent.matricule,
+      campus: selectedStudent.campus || currentUser?.etablissement || "",
+      filiere: selectedStudent.filiere || "",
+      classe: selectedStudent.niveau || "L1",
       montant: Number(form.montant),
       date: form.date,
       mode: form.mode,
       agentId: currentUser?.id || "",
       agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
-      note: form.note,
+      note,
     });
 
-    // Update ecolage if exists
     if (newPay) {
-      const ecolage = ecolages.find(e => e.etudiantId === getStudentId(student));
+      const ecolage = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
       if (ecolage && (ecolage.id || ecolage._id)) {
         const newPaye = ecolage.montantPaye + Number(form.montant);
         const newStatut = newPaye >= ecolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
@@ -105,7 +113,9 @@ export default function PaiementsPage() {
     await load();
     setSaving(false);
     setShowModal(false);
-    setForm({ etudiantId: "", montant: "", date: new Date().toISOString().split("T")[0], mode: "especes", note: "" });
+    setSelectedStudent(null);
+    setStudentSearch("");
+    setForm({ montant: "", mois: MOIS[new Date().getMonth()], annee: new Date().getFullYear().toString(), date: new Date().toISOString().split("T")[0], mode: "Especes", note: "" });
   };
 
   return (
@@ -113,15 +123,16 @@ export default function PaiementsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Paiements</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{loading ? "Chargement..." : `${paiements.length} paiements enregistres`}</p>
+          <p className="text-sm text-slate-500 mt-0.5">{loading ? "Chargement..." : `${paiements.length} paiements`}</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
           <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
           <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-brand-600/20 transition-colors">
-            <Plus size={16} /> Enregistrer un paiement
+            className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md transition-colors"
+            style={{ background: etabColor }}>
+            <Plus size={16} /> Enregistrer paiement
           </button>
         </div>
       </div>
@@ -129,7 +140,7 @@ export default function PaiementsPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="card"><div className="text-xl font-bold text-brand-700">{formatMGA(totalEncaisse)}</div><div className="text-xs text-slate-400 mt-0.5">Total encaisse</div></div>
-        <div className="card"><div className="text-xl font-bold text-slate-900">{paiements.length}</div><div className="text-xs text-slate-400 mt-0.5">Nb paiements</div></div>
+        <div className="card"><div className="text-xl font-bold text-slate-900">{paiements.length}</div><div className="text-xs text-slate-400 mt-0.5">Paiements</div></div>
         <div className="card"><div className="text-xl font-bold text-slate-900">{students.length}</div><div className="text-xs text-slate-400 mt-0.5">Etudiants</div></div>
       </div>
 
@@ -138,8 +149,7 @@ export default function PaiementsPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Rechercher par etudiant ou reference..." value={search}
-              onChange={e => setSearch(e.target.value)}
+            <input type="text" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
           </div>
           <div className="relative">
@@ -156,13 +166,16 @@ export default function PaiementsPage() {
       {/* Table */}
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <div className="py-12 text-center"><div className="w-7 h-7 rounded-full border-2 border-brand-600 border-t-transparent animate-spin mx-auto mb-2" /><p className="text-slate-400 text-sm">Chargement...</p></div>
+          <div className="py-12 text-center">
+            <div className="w-7 h-7 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-2" style={{ borderColor: etabColor, borderTopColor: "transparent" }} />
+            <p className="text-slate-400 text-sm">Chargement...</p>
+          </div>
         ) : (
           <>
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>{["Reference", "Etudiant", "Campus", "Montant", "Mode", "Date", "Agent", "Note"].map(h => (
+                  <tr>{["Reference", "Etudiant", "Montant", "Mode", "Date", "Note", "Agent"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                   ))}</tr>
                 </thead>
@@ -171,12 +184,11 @@ export default function PaiementsPage() {
                     <tr key={p.id || p._id || i} className="hover:bg-slate-50/60 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-slate-400">{p.reference || "—"}</td>
                       <td className="px-4 py-3 font-semibold text-slate-900">{p.etudiantNom}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{p.campus}</td>
                       <td className="px-4 py-3 font-bold text-emerald-700">{formatMGA(p.montant)}</td>
                       <td className="px-4 py-3"><span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{p.mode}</span></td>
                       <td className="px-4 py-3 text-slate-500 text-xs">{p.date}</td>
-                      <td className="px-4 py-3 text-slate-500 text-xs">{p.agentNom}</td>
                       <td className="px-4 py-3 text-slate-400 text-xs">{p.note || "—"}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{p.agentNom}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -187,8 +199,9 @@ export default function PaiementsPage() {
               {filtered.map((p, i) => (
                 <div key={p.id || p._id || i} className="p-4 space-y-1">
                   <div className="flex justify-between"><span className="font-semibold text-slate-900 text-sm">{p.etudiantNom}</span><span className="font-bold text-emerald-700">{formatMGA(p.montant)}</span></div>
-                  <div className="flex gap-2 text-xs text-slate-400"><span>{p.date}</span><span>{p.mode}</span><span>{p.agentNom}</span></div>
-                  {p.reference && <div className="font-mono text-xs text-slate-300">{p.reference}</div>}
+                  <div className="flex gap-2 text-xs text-slate-400"><span>{p.date}</span><span>{p.mode}</span></div>
+                  {p.note && <div className="text-xs text-slate-400">{p.note}</div>}
+                  <div className="text-xs text-slate-400">Agent: {p.agentNom}</div>
                 </div>
               ))}
             </div>
@@ -196,79 +209,222 @@ export default function PaiementsPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* ─── PAYMENT MODAL ─── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900">Enregistrer un paiement</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 text-xl">x</button>
+              <button onClick={() => { setShowModal(false); setSelectedStudent(null); setStudentSearch(""); setFormError(""); }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                <X size={16} />
+              </button>
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Etudiant</label>
-                <div className="relative">
-                  <select value={form.etudiantId} onChange={e => setForm(f => ({ ...f, etudiantId: e.target.value }))}
-                    className="appearance-none w-full px-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                    <option value="">Selectionner un etudiant</option>
-                    {students.map(s => <option key={getStudentId(s)} value={getStudentId(s)}>{getStudentName(s)} — {s.matricule || s.niveau || ""}</option>)}
-                  </select>
-                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-              </div>
-              {/* Show ecolage info */}
-              {form.etudiantId && (() => {
-                const ec = ecolages.find(e => e.etudiantId === form.etudiantId);
-                if (!ec) return <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">Aucun ecolage defini pour cet etudiant</div>;
-                return (
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs space-y-0.5">
-                    <div className="flex justify-between"><span className="text-slate-500">Total du</span><span className="font-bold text-slate-700">{formatMGA(ec.montantDu)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Deja paye</span><span className="font-bold text-emerald-700">{formatMGA(ec.montantPaye)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Reste</span><span className="font-bold text-red-600">{formatMGA(ec.montantDu - ec.montantPaye)}</span></div>
+
+            {/* ── Student selector ── */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-2">Etudiant</label>
+              {selectedStudent ? (
+                <div className="flex items-center gap-3 p-3 bg-brand-50 border-2 border-brand-200 rounded-xl">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{ background: etabColor }}>
+                    {getStudentName(selectedStudent).split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                   </div>
-                );
-              })()}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">Montant (Ar)</label>
-                  <input type="number" placeholder="Ex: 450000" value={form.montant}
-                    onChange={e => setForm(f => ({ ...f, montant: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 text-sm">{getStudentName(selectedStudent)}</div>
+                    <div className="text-xs text-slate-500">{selectedStudent.matricule} · {selectedStudent.filiere}</div>
+                    {(() => {
+                      const ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
+                      if (!ec) return <div className="text-xs text-amber-600 mt-0.5">Aucun ecolage defini</div>;
+                      return <div className="text-xs text-emerald-600 mt-0.5">Reste: {formatMGA(ec.montantDu - ec.montantPaye)}</div>;
+                    })()}
+                  </div>
+                  <button onClick={() => setSelectedStudent(null)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <X size={14} />
+                  </button>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">Date</label>
-                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
-                </div>
-              </div>
+              ) : (
+                <button onClick={() => setShowStudentPicker(true)}
+                  className="w-full flex items-center gap-3 p-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50/50 transition-all text-sm">
+                  <Search size={16} />
+                  <span>Cliquer pour selectionner un etudiant...</span>
+                </button>
+              )}
+            </div>
+
+            {/* ── Month / Year ── */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Mode de paiement</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">Mois de paiement</label>
                 <div className="relative">
-                  <select value={form.mode} onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}
+                  <select value={form.mois} onChange={e => setForm(f => ({ ...f, mois: e.target.value }))}
                     className="appearance-none w-full px-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                    {MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                    {MOIS.map(m => <option key={m}>{m}</option>)}
                   </select>
                   <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Note (optionnel)</label>
-                <textarea rows={2} placeholder="Ex: 1ere tranche..." value={form.note}
-                  onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300 resize-none" />
-              </div>
-              {formError && <p className="text-red-500 text-xs">{formError}</p>}
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-xs text-blue-700">
-                Agent: <span className="font-bold">{currentUser?.prenom} {currentUser?.nom}</span>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">Annee</label>
+                <div className="relative">
+                  <select value={form.annee} onChange={e => setForm(f => ({ ...f, annee: e.target.value }))}
+                    className="appearance-none w-full px-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
+                    {["2024","2025","2026"].map(y => <option key={y}>{y}</option>)}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
               </div>
             </div>
+
+            {/* ── Amount / Date ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">Montant (Ar)</label>
+                <input type="number" placeholder="Ex: 150000" value={form.montant}
+                  onChange={e => setForm(f => ({ ...f, montant: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">Date</label>
+                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              </div>
+            </div>
+
+            {/* ── Mode ── */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-2">Mode de paiement</label>
+              <div className="grid grid-cols-2 gap-2">
+                {MODES.map(m => (
+                  <button key={m} type="button" onClick={() => setForm(f => ({ ...f, mode: m }))}
+                    className={clsx("flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all text-left",
+                      form.mode === m ? "border-brand-500 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600 hover:border-brand-200 hover:bg-slate-50")}>
+                    <div className={clsx("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0",
+                      form.mode === m ? "border-brand-500 bg-brand-500" : "border-slate-300")}>
+                      {form.mode === m && <Check size={10} className="text-white" />}
+                    </div>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Note ── */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1">Note (optionnel)</label>
+              <textarea rows={2} placeholder="Ex: 1ere tranche, complement..." value={form.note}
+                onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300 resize-none" />
+            </div>
+
+            {formError && <p className="text-red-500 text-xs bg-red-50 border border-red-100 rounded-xl px-3 py-2">{formError}</p>}
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-xs text-blue-700">
+              Agent: <span className="font-bold">{currentUser?.prenom} {currentUser?.nom}</span>
+            </div>
+
             <div className="flex gap-3 pt-1">
-              <button onClick={() => { setShowModal(false); setFormError(""); }}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Annuler</button>
+              <button onClick={() => { setShowModal(false); setSelectedStudent(null); setFormError(""); }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                Annuler
+              </button>
               <button onClick={handleAdd} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors shadow-md shadow-brand-600/20 disabled:opacity-60">
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-colors shadow-md disabled:opacity-60"
+                style={{ background: etabColor }}>
                 {saving ? "Enregistrement..." : "Enregistrer"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── STUDENT PICKER MODAL ─── */}
+      {showStudentPicker && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg">Selectionner un etudiant</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{filteredStudents.length} etudiant(s)</p>
+              </div>
+              <button onClick={() => setShowStudentPicker(false)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Search + filter */}
+            <div className="p-4 border-b border-slate-100 space-y-3">
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Rechercher par nom ou matricule..." value={studentSearch}
+                  onChange={e => setStudentSearch(e.target.value)} autoFocus
+                  className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              </div>
+              {!isAdmin && filieres.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {["Toutes", ...filieres].map(f => (
+                    <button key={f} onClick={() => setFiliereFilter(f)}
+                      className={clsx("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border",
+                        filiereFilter === f ? "text-white border-transparent" : "bg-white border-slate-200 text-slate-600 hover:border-slate-300")}
+                      style={filiereFilter === f ? { background: etabColor, borderColor: etabColor } : {}}>
+                      {f === "Toutes" ? "Toutes" : f.length > 22 ? f.slice(0, 22) + "..." : f}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Student list */}
+            <div className="overflow-y-auto flex-1">
+              {filteredStudents.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <Search size={28} className="mx-auto mb-2 opacity-20" />
+                  <p className="text-sm">Aucun etudiant</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {filteredStudents.map(s => {
+                    const ec = ecolages.find(e => e.etudiantId === getStudentId(s));
+                    const initials = getStudentName(s).split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+                    return (
+                      <button key={getStudentId(s)} onClick={() => { setSelectedStudent(s); setShowStudentPicker(false); }}
+                        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-brand-50/60 transition-colors text-left group">
+                        <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm"
+                          style={{ background: etabColor }}>
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-slate-900 text-sm group-hover:text-brand-700 transition-colors">
+                            {getStudentName(s)}
+                          </div>
+                          <div className="flex flex-wrap gap-2 mt-0.5">
+                            {s.matricule && <span className="font-mono text-xs text-slate-400">{s.matricule}</span>}
+                            {s.filiere && <span className="text-xs text-slate-400 truncate max-w-[200px]">{s.filiere}</span>}
+                            {s.niveau && (
+                              <span className="text-xs font-bold px-1.5 py-0.5 rounded-full text-white"
+                                style={{ background: etabColor + "99" }}>{s.niveau}</span>
+                            )}
+                          </div>
+                          {ec && (
+                            <div className="flex gap-3 mt-1 text-xs">
+                              <span className="text-emerald-600">Paye: {formatMGA(ec.montantPaye)}</span>
+                              {ec.montantDu > ec.montantPaye && (
+                                <span className="text-red-500">Reste: {formatMGA(ec.montantDu - ec.montantPaye)}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="w-8 h-8 rounded-full border-2 border-slate-200 group-hover:border-brand-400 flex items-center justify-center transition-all">
+                          <div className="w-3 h-3 rounded-full bg-transparent group-hover:bg-brand-400 transition-all" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

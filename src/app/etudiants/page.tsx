@@ -118,7 +118,7 @@ export default function EtudiantsPage() {
           <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Actualiser
           </button>
-          <a href="https://groupegsi.mg/rtmggmg/" target="_blank" rel="noreferrer"
+          <a href="https://groupegsi.mg/web/admincreat/" target="_blank" rel="noreferrer"
             className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md transition-colors"
             style={{background: etabColor}}>
             <ExternalLink size={15} /> Ajouter etudiant
