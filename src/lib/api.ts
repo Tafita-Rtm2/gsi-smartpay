@@ -1,9 +1,17 @@
 // ─── GSI Database API Client ─────────────────────────────────────────────────
-// Base: https://groupegsi.mg/rtmggmg/api
+// Routes confirmées depuis server.js:
+//   GET    /api/db/:collection          → lire tous les documents
+//   GET    /api/db/:collection/:id      → lire un document
+//   POST   /api/db/:collection          → insérer un document
+//   PUT    /api/db/:collection/:id      → remplacer un document
+//   PATCH  /api/db/:collection/:id      → mettre à jour partiellement
+//   DELETE /api/db/:collection/:id      → supprimer
+//   POST   /api/search                  → recherche globale
+//   GET    /api/collections             → lister collections
 
 export const API_BASE = "https://groupegsi.mg/rtmggmg/api";
 
-// ─── Types from the real database ────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface DBStudent {
   id?: string;
@@ -15,9 +23,9 @@ export interface DBStudent {
   matricule?: string;
   contact?: string;
   telephone?: string;
-  campus?: string;        // etablissement
+  campus?: string;
   filiere?: string;
-  niveau?: string;        // classe (L1, L2...)
+  niveau?: string;
   password?: string;
   photo?: string;
   annee?: string;
@@ -37,7 +45,6 @@ export interface DBEcolage {
   montantDu: number;
   montantPaye: number;
   statut: "paye" | "impaye" | "en_attente";
-  paiements?: DBPaiement[];
   annee?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -62,79 +69,78 @@ export interface DBPaiement {
   createdAt?: string;
 }
 
-// ─── Generic API helpers ──────────────────────────────────────────────────────
+// ─── Parse response ───────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseArray<T>(data: any): T[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data as T[];
+  for (const key of ["data","documents","results","items","records","list"]) {
+    if (Array.isArray(data[key])) return data[key] as T[];
+  }
+  return [];
+}
+
+// ─── Core helpers — route is /api/db/:collection ─────────────────────────────
 
 async function apiGet<T>(collection: string): Promise<T[]> {
   try {
-    const res = await fetch(`${API_BASE}/${collection}`, {
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch(`${API_BASE}/db/${collection}`, {
+      method: "GET",
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
       cache: "no-store",
     });
-    if (!res.ok) throw new Error(`GET ${collection} failed: ${res.status}`);
+    if (!res.ok) return [];
     const data = await res.json();
-    // API may return array directly or { data: [...] }
-    return Array.isArray(data) ? data : data.data || data.documents || [];
+    if (data?.error) return [];
+    return parseArray<T>(data);
   } catch (e) {
-    console.error("API GET error:", e);
+    console.error(`apiGet(${collection}):`, e);
     return [];
   }
 }
 
 async function apiPost<T>(collection: string, body: object): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}/${collection}`, {
+    const res = await fetch(`${API_BASE}/db/${collection}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`POST ${collection} failed: ${res.status}`);
+    if (!res.ok) return null;
     const data = await res.json();
-    return data.document || data.data || data;
+    if (data?.error) return null;
+    return (data.document || data.data || data) as T;
   } catch (e) {
-    console.error("API POST error:", e);
+    console.error(`apiPost(${collection}):`, e);
     return null;
   }
 }
 
 async function apiPatch(collection: string, id: string, body: object): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/${collection}/${id}`, {
+    const res = await fetch(`${API_BASE}/db/${collection}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     return res.ok;
   } catch (e) {
-    console.error("API PATCH error:", e);
+    console.error(`apiPatch(${collection}/${id}):`, e);
     return false;
   }
 }
 
-async function apiDelete(collection: string, id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/${collection}/${id}`, {
-      method: "DELETE",
-    });
-    return res.ok;
-  } catch (e) {
-    console.error("API DELETE error:", e);
-    return false;
-  }
-}
-
-// ─── Students (users collection) ─────────────────────────────────────────────
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function fetchStudents(): Promise<DBStudent[]> {
   return apiGet<DBStudent>("users");
 }
 
-// ─── Ecolages ─────────────────────────────────────────────────────────────────
-
 export async function fetchEcolages(): Promise<DBEcolage[]> {
   return apiGet<DBEcolage>("ecolage");
 }
 
-export async function createEcolage(data: Omit<DBEcolage, "id" | "_id">): Promise<DBEcolage | null> {
+export async function createEcolage(data: Omit<DBEcolage, "id"|"_id">): Promise<DBEcolage | null> {
   return apiPost<DBEcolage>("ecolage", { ...data, createdAt: new Date().toISOString() });
 }
 
@@ -142,16 +148,13 @@ export async function updateEcolage(id: string, data: Partial<DBEcolage>): Promi
   return apiPatch("ecolage", id, { ...data, updatedAt: new Date().toISOString() });
 }
 
-// ─── Paiements ────────────────────────────────────────────────────────────────
-
 export async function fetchPaiements(): Promise<DBPaiement[]> {
   return apiGet<DBPaiement>("paiements");
 }
 
-export async function createPaiement(data: Omit<DBPaiement, "id" | "_id">): Promise<DBPaiement | null> {
-  const count = Math.floor(Math.random() * 9000) + 1000;
-  const prefix = data.campus.slice(0, 3).toUpperCase();
-  const reference = `REC-${prefix}-${count}`;
+export async function createPaiement(data: Omit<DBPaiement, "id"|"_id">): Promise<DBPaiement | null> {
+  const prefix = (data.campus || "GSI").slice(0,3).toUpperCase();
+  const reference = `REC-${prefix}-${Date.now().toString().slice(-6)}`;
   return apiPost<DBPaiement>("paiements", {
     ...data,
     reference,
