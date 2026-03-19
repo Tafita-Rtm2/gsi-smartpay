@@ -8,6 +8,7 @@ export interface DBStudent {
   prenom?: string;
   email?: string;
   matricule?: string;
+  photo?: string;
   contact?: string;
   telephone?: string;
   campus?: string;
@@ -24,6 +25,7 @@ export interface DBEcolage {
   etudiantId: string;
   etudiantNom: string;
   matricule?: string;
+  photo?: string;
   campus: string;
   filiere: string;
   classe: string;
@@ -42,6 +44,7 @@ export interface DBPaiement {
   etudiantId: string;
   etudiantNom: string;
   matricule?: string;
+  photo?: string;
   campus: string;
   filiere: string;
   classe: string;
