@@ -70,8 +70,9 @@ export interface DBPaiement {
 }
 
 // ─── Parse response ───────────────────────────────────────────────────────────
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseArray<T>(data: any): T[] {
+function parseArray<T>(data: unknown): T[] {
   if (!data) return [];
   if (Array.isArray(data)) return data as T[];
   for (const key of ["data","documents","results","items","records","list"]) {
