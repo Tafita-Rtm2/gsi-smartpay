@@ -13,6 +13,7 @@ export interface DBStudent {
   campus?: string;
   filiere?: string;
   niveau?: string;
+  photo?: string;
   annee?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -30,6 +31,7 @@ export interface DBEcolage {
   montantDu: number;
   montantPaye: number;
   statut: "paye" | "impaye" | "en_attente";
+  photo?: string;
   annee?: string;
   createdAt?: string;
   updatedAt?: string;
