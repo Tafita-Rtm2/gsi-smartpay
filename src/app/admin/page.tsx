@@ -40,7 +40,7 @@ export default function AdminPage() {
     if (appState.users.find(u => u.username === form.username)) {
       setFormError("Ce nom d'utilisateur existe deja"); return;
     }
-    createUser({ ...form });
+    createUser({ ...form, createdBy: "admin" });
     setShowCreateUser(false);
     setForm({ username: "", password: "", nom: "", prenom: "", role: "comptable", etablissement: "analakely", actif: true });
     setFormError("");
@@ -403,7 +403,7 @@ export default function AdminPage() {
                 <div key={key}>
                   <label className="text-xs font-semibold text-white/50 block mb-1">{label}</label>
                   <input type="text" placeholder={placeholder}
-                    value={(form as Record<string, unknown>)[key] as string}
+                    value={(form as Record<string, string>)[key]}
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                     className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
                 </div>
