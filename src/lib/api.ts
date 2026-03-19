@@ -70,7 +70,6 @@ export interface DBPaiement {
 }
 
 // ─── Parse response ───────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseArray<T>(data: any): T[] {
   if (!data) return [];
   if (Array.isArray(data)) return data as T[];

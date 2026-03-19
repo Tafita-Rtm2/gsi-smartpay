@@ -6,7 +6,7 @@ import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEco
 import clsx from "clsx";
 import { ETABLISSEMENTS } from "@/lib/data";
 
-const MODES = ["Especes", "Cheque", "Virement bancaire", "Recu de banque"];
+const MODES = ["Especes"];
 const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
 export default function PaiementsPage() {
@@ -270,7 +270,7 @@ export default function PaiementsPage() {
                 <div className="relative">
                   <select value={form.annee} onChange={e => setForm(f => ({ ...f, annee: e.target.value }))}
                     className="appearance-none w-full px-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                    {["2024","2025","2026"].map(y => <option key={y}>{y}</option>)}
+                    {["2025","2026","2027"].map(y => <option key={y}>{y}</option>)}
                   </select>
                   <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
