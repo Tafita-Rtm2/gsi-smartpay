@@ -2,40 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
-
-:root {
-  --font-outfit: 'Outfit', sans-serif;
-  --font-space-mono: 'Space Mono', monospace;
-}
-
-* {
-  box-sizing: border-box;
-}
-
 body {
-  font-family: var(--font-outfit), system-ui, sans-serif;
-  background-color: #f0f4ff;
+  font-family: 'Outfit', system-ui, sans-serif;
+  background-color: #f8fafc;
   color: #1a1f36;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #f0f4ff; }
-::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #818cf8; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 
-/* Status badges */
 .badge-paid    { @apply bg-emerald-100 text-emerald-700 border border-emerald-200; }
 .badge-unpaid  { @apply bg-red-100 text-red-700 border border-red-200; }
 .badge-pending { @apply bg-amber-100 text-amber-700 border border-amber-200; }
 
-/* Card */
 .card {
   @apply bg-white rounded-2xl shadow-sm border border-slate-100 p-5;
-}
-
-/* Stat card */
-.stat-card {
-  @apply bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col gap-2;
 }
