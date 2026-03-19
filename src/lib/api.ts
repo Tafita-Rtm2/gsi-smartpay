@@ -1,17 +1,4 @@
-// ─── GSI Database API Client ─────────────────────────────────────────────────
-// Routes confirmées depuis server.js:
-//   GET    /api/db/:collection          → lire tous les documents
-//   GET    /api/db/:collection/:id      → lire un document
-//   POST   /api/db/:collection          → insérer un document
-//   PUT    /api/db/:collection/:id      → remplacer un document
-//   PATCH  /api/db/:collection/:id      → mettre à jour partiellement
-//   DELETE /api/db/:collection/:id      → supprimer
-//   POST   /api/search                  → recherche globale
-//   GET    /api/collections             → lister collections
-
 export const API_BASE = "https://groupegsi.mg/rtmggmg/api";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface DBStudent {
   id?: string;
@@ -26,8 +13,6 @@ export interface DBStudent {
   campus?: string;
   filiere?: string;
   niveau?: string;
-  password?: string;
-  photo?: string;
   annee?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -69,15 +54,14 @@ export interface DBPaiement {
   createdAt?: string;
 }
 
-// ─── Parse response ───────────────────────────────────────────────────────────
+function parseArray<T>(data: Record<string, unknown> | unknown[]): T[] {
   if (Array.isArray(data)) return data as T[];
-  for (const key of ["data","documents","results","items","records","list"]) {
-    if (Array.isArray(data[key])) return data[key] as T[];
+  for (const key of ["data", "documents", "results", "items", "records", "list"]) {
+    const val = (data as Record<string, unknown>)[key];
+    if (Array.isArray(val)) return val as T[];
   }
   return [];
 }
-
-// ─── Core helpers — route is /api/db/:collection ─────────────────────────────
 
 async function apiGet<T>(collection: string): Promise<T[]> {
   try {
@@ -127,8 +111,6 @@ async function apiPatch(collection: string, id: string, body: object): Promise<b
   }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
 export async function fetchStudents(): Promise<DBStudent[]> {
   return apiGet<DBStudent>("users");
 }
@@ -137,7 +119,7 @@ export async function fetchEcolages(): Promise<DBEcolage[]> {
   return apiGet<DBEcolage>("ecolage");
 }
 
-export async function createEcolage(data: Omit<DBEcolage, "id"|"_id">): Promise<DBEcolage | null> {
+export async function createEcolage(data: Omit<DBEcolage, "id" | "_id">): Promise<DBEcolage | null> {
   return apiPost<DBEcolage>("ecolage", { ...data, createdAt: new Date().toISOString() });
 }
 
@@ -149,17 +131,11 @@ export async function fetchPaiements(): Promise<DBPaiement[]> {
   return apiGet<DBPaiement>("paiements");
 }
 
-export async function createPaiement(data: Omit<DBPaiement, "id"|"_id">): Promise<DBPaiement | null> {
-  const prefix = (data.campus || "GSI").slice(0,3).toUpperCase();
+export async function createPaiement(data: Omit<DBPaiement, "id" | "_id">): Promise<DBPaiement | null> {
+  const prefix = (data.campus || "GSI").slice(0, 3).toUpperCase();
   const reference = `REC-${prefix}-${Date.now().toString().slice(-6)}`;
-  return apiPost<DBPaiement>("paiements", {
-    ...data,
-    reference,
-    createdAt: new Date().toISOString(),
-  });
+  return apiPost<DBPaiement>("paiements", { ...data, reference, createdAt: new Date().toISOString() });
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function getStudentId(s: DBStudent): string {
   return s.id || s._id || "";
