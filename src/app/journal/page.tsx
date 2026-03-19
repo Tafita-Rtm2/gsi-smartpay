@@ -1,24 +1,47 @@
 "use client";
-import { useState } from "react";
-import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { formatMGA } from "@/lib/data";
+import { fetchPaiements, fetchEcolages, createEcolage, DBPaiement, DBEcolage, getStudentId, formatMGA } from "@/lib/api";
+import { ETABLISSEMENTS } from "@/lib/data";
 
 const CATEGORIES = ["Toutes", "Charges", "Materiel", "RH", "Autre"];
 
 export default function JournalPage() {
-  const { myPayments, myExpenses, addExpense, currentUser } = useAuth();
+  const { myExpenses, addExpense, currentUser } = useAuth();
+  const [paiements, setPaiements] = useState<DBPaiement[]>([]);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"recettes" | "depenses">("recettes");
   const [catFilter, setCatFilter] = useState("Toutes");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ libelle: "", categorie: "Charges", montant: "", date: new Date().toISOString().split("T")[0] });
 
-  const recettes = myPayments.filter(p => p.statut === "paye");
-  const totalRecettes = recettes.reduce((s, p) => s + p.montant, 0);
+  const etabInfo = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
+  const etabColor = etabInfo?.color || "#2563eb";
+  const isAdmin = currentUser?.role === "admin";
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const pays = await fetchPaiements();
+    if (!isAdmin && currentUser) {
+      const myEtab = currentUser.etablissement;
+      setPaiements(pays.filter(p => (p.campus || "").toLowerCase().includes(myEtab)));
+    } else {
+      setPaiements(pays);
+    }
+    setLoading(false);
+  }, [isAdmin, currentUser]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Only paiements from the real DB are recettes — NOT mock data
+  const totalRecettes = paiements.reduce((s, p) => s + p.montant, 0);
   const totalDepenses = myExpenses.reduce((s, e) => s + e.montant, 0);
   const solde = totalRecettes - totalDepenses;
 
-  const filteredExpenses = myExpenses.filter(e => catFilter === "Toutes" || e.categorie === catFilter);
+  const filteredExpenses = myExpenses.filter(e =>
+    catFilter === "Toutes" || e.categorie === catFilter
+  );
 
   const handleAddExpense = () => {
     if (!form.libelle || !form.montant) return;
@@ -37,12 +60,16 @@ export default function JournalPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Journal Financier</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Recettes et depenses</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Journal Financier</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Recettes et depenses</p>
+        </div>
+        <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-sm transition-colors">
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+        </button>
       </div>
 
-      {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card border border-emerald-100">
           <div className="flex items-center gap-3 mb-2">
@@ -52,6 +79,7 @@ export default function JournalPage() {
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Recettes</span>
           </div>
           <div className="text-2xl font-bold text-emerald-700">{formatMGA(totalRecettes)}</div>
+          <div className="text-xs text-slate-400 mt-1">{paiements.length} paiement(s) enregistre(s)</div>
         </div>
         <div className="card border border-red-100">
           <div className="flex items-center gap-3 mb-2">
@@ -73,11 +101,11 @@ export default function JournalPage() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
         {(["recettes", "depenses"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            style={tab === t ? { color: etabColor } : {}}>
             {t === "recettes" ? "Journal des Recettes" : "Journal des Depenses"}
           </button>
         ))}
@@ -85,51 +113,50 @@ export default function JournalPage() {
 
       {tab === "recettes" && (
         <div className="card p-0 overflow-hidden">
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>
-                  {["Date", "Reference", "Etudiant", "Filiere", "Montant", "Mode", "Agent"].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {recettes.map(r => (
-                  <tr key={r.id} className="hover:bg-emerald-50/30 transition-colors">
-                    <td className="px-4 py-3 text-xs text-slate-500">{r.date}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{r.reference}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-800">{r.etudiantNom}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500 max-w-[150px] truncate">{r.filiere} — {r.classe}</td>
-                    <td className="px-4 py-3 font-bold text-emerald-700">{formatMGA(r.montant)}</td>
-                    <td className="px-4 py-3"><span className="bg-slate-100 text-xs px-2 py-0.5 rounded-full">{r.mode}</span></td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{r.agentNom}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-emerald-50 border-t-2 border-emerald-100">
-                <tr>
-                  <td colSpan={4} className="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wide">Total Recettes</td>
-                  <td className="px-4 py-3 font-bold text-emerald-700 text-base">{formatMGA(totalRecettes)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div className="md:hidden divide-y divide-slate-100">
-            {recettes.map(r => (
-              <div key={r.id} className="p-4 space-y-1">
-                <div className="flex justify-between">
-                  <span className="font-semibold text-slate-900 text-sm">{r.etudiantNom}</span>
-                  <span className="font-bold text-emerald-700">{formatMGA(r.montant)}</span>
-                </div>
-                <div className="flex gap-3 text-xs text-slate-400">
-                  <span>{r.date}</span><span>{r.mode}</span><span>{r.agentNom}</span>
-                </div>
+          {loading ? (
+            <div className="py-10 text-center"><div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin mx-auto" style={{ borderColor: etabColor, borderTopColor: "transparent" }} /></div>
+          ) : (
+            <>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>{["Date", "Reference", "Etudiant", "Filiere", "Montant", "Note", "Agent"].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
+                    ))}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {paiements.map((r, i) => (
+                      <tr key={r.id || r._id || i} className="hover:bg-emerald-50/30">
+                        <td className="px-4 py-3 text-xs text-slate-500">{r.date}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-400">{r.reference || "—"}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-800">{r.etudiantNom}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500 max-w-[140px] truncate">{r.filiere}</td>
+                        <td className="px-4 py-3 font-bold text-emerald-700">{formatMGA(r.montant)}</td>
+                        <td className="px-4 py-3 text-xs text-slate-400">{r.note || "—"}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500">{r.agentNom}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-emerald-50 border-t-2 border-emerald-100">
+                    <tr>
+                      <td colSpan={4} className="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wide">Total Recettes</td>
+                      <td className="px-4 py-3 font-bold text-emerald-700 text-base">{formatMGA(totalRecettes)}</td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
-            ))}
-            {recettes.length === 0 && <div className="py-10 text-center text-slate-400 text-sm">Aucune recette</div>}
-          </div>
+              <div className="md:hidden divide-y divide-slate-100">
+                {paiements.map((r, i) => (
+                  <div key={r.id || r._id || i} className="p-4 space-y-1">
+                    <div className="flex justify-between"><span className="font-semibold text-slate-900 text-sm">{r.etudiantNom}</span><span className="font-bold text-emerald-700">{formatMGA(r.montant)}</span></div>
+                    <div className="flex gap-2 text-xs text-slate-400"><span>{r.date}</span>{r.note && <span>{r.note}</span>}<span>{r.agentNom}</span></div>
+                  </div>
+                ))}
+                {paiements.length === 0 && <div className="py-8 text-center text-slate-400 text-sm">Aucune recette</div>}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -138,13 +165,14 @@ export default function JournalPage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-between">
             <div className="relative">
               <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300 bg-white">
+                className="appearance-none pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
               <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
             <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-red-500/20 transition-colors self-start">
+              className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md transition-colors self-start"
+              style={{ background: "#ef4444" }}>
               <Plus size={15} /> Ajouter une depense
             </button>
           </div>
@@ -152,15 +180,13 @@ export default function JournalPage() {
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>
-                    {["Date", "Libelle", "Categorie", "Agent", "Montant"].map(h => (
-                      <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
-                    ))}
-                  </tr>
+                  <tr>{["Date", "Libelle", "Categorie", "Agent", "Montant"].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
+                  ))}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {filteredExpenses.map(e => (
-                    <tr key={e.id} className="hover:bg-red-50/20 transition-colors">
+                    <tr key={e.id} className="hover:bg-red-50/20">
                       <td className="px-4 py-3 text-xs text-slate-500">{e.date}</td>
                       <td className="px-4 py-3 font-medium text-slate-800">{e.libelle}</td>
                       <td className="px-4 py-3"><span className="bg-red-50 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">{e.categorie}</span></td>
@@ -169,25 +195,24 @@ export default function JournalPage() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-red-50 border-t-2 border-red-100">
-                  <tr>
-                    <td colSpan={4} className="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wide">Total Depenses</td>
-                    <td className="px-4 py-3 font-bold text-red-700 text-base">{formatMGA(totalDepenses)}</td>
-                  </tr>
-                </tfoot>
+                {filteredExpenses.length > 0 && (
+                  <tfoot className="bg-red-50 border-t-2 border-red-100">
+                    <tr>
+                      <td colSpan={4} className="px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-wide">Total Depenses</td>
+                      <td className="px-4 py-3 font-bold text-red-700 text-base">{formatMGA(totalDepenses)}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
             <div className="md:hidden divide-y divide-slate-100">
               {filteredExpenses.map(e => (
                 <div key={e.id} className="p-4 flex justify-between items-start">
-                  <div>
-                    <div className="font-medium text-slate-800 text-sm">{e.libelle}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{e.categorie} · {e.date} · {e.agentNom}</div>
-                  </div>
+                  <div><div className="font-medium text-slate-800 text-sm">{e.libelle}</div><div className="text-xs text-slate-400 mt-0.5">{e.categorie} · {e.date}</div></div>
                   <span className="font-bold text-red-700 text-sm">{formatMGA(e.montant)}</span>
                 </div>
               ))}
-              {filteredExpenses.length === 0 && <div className="py-10 text-center text-slate-400 text-sm">Aucune depense</div>}
+              {filteredExpenses.length === 0 && <div className="py-8 text-center text-slate-400 text-sm">Aucune depense</div>}
             </div>
           </div>
         </div>
@@ -198,7 +223,7 @@ export default function JournalPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900">Nouvelle depense</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">x</button>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">x</button>
             </div>
             <div className="space-y-3">
               <div>
@@ -216,8 +241,7 @@ export default function JournalPage() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-600 block mb-1">Date</label>
-                  <input type="date" value={form.date}
-                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
                 </div>
               </div>
@@ -225,7 +249,7 @@ export default function JournalPage() {
                 <label className="text-xs font-semibold text-slate-600 block mb-1">Categorie</label>
                 <div className="relative">
                   <select value={form.categorie} onChange={e => setForm(f => ({ ...f, categorie: e.target.value }))}
-                    className="appearance-none w-full px-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300 bg-white">
+                    className="appearance-none w-full px-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
                     {CATEGORIES.filter(c => c !== "Toutes").map(c => <option key={c}>{c}</option>)}
                   </select>
                   <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -234,13 +258,9 @@ export default function JournalPage() {
             </div>
             <div className="flex gap-3 pt-1">
               <button onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-                Annuler
-              </button>
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
               <button onClick={handleAddExpense}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">
-                Enregistrer
-              </button>
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">Enregistrer</button>
             </div>
           </div>
         </div>
