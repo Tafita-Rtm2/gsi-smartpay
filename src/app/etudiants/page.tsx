@@ -1,55 +1,69 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Search, RefreshCw, ExternalLink, Info, X, Phone, Mail, GraduationCap, CreditCard, Calendar, MapPin, Edit3, Trash2, AlertTriangle, Users, CheckCircle2, Clock, ChevronDown } from "lucide-react";
+import {
+  Search, RefreshCw, ExternalLink, Info, X,
+  Phone, Mail, GraduationCap, CreditCard, Calendar,
+  MapPin, Edit3, Trash2, AlertTriangle, Users,
+  CheckCircle2, Clock, ChevronDown, Plus
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS } from "@/lib/data";
-import { fetchStudents, fetchEcolages, createEcolage, updateEcolage, DBStudent, DBEcolage, getStudentId, getStudentName, getStudentCampus, formatMGA } from "@/lib/api";
+import {
+  fetchStudents, fetchEcolages, createEcolage, updateEcolage,
+  DBStudent, DBEcolage,
+  getStudentId, getStudentName, getStudentCampus, formatMGA
+} from "@/lib/api";
 import clsx from "clsx";
 
 const STATUT_COLORS = {
-  paye: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-  impaye: "bg-red-100 text-red-700 border border-red-200",
+  paye:       "bg-emerald-100 text-emerald-700 border border-emerald-200",
+  impaye:     "bg-red-100 text-red-700 border border-red-200",
   en_attente: "bg-amber-100 text-amber-700 border border-amber-200",
 };
 const STATUT_LABELS = { paye: "Paye", impaye: "Impaye", en_attente: "En attente" };
-const STATUT_DOT = { paye: "bg-emerald-500", impaye: "bg-red-500", en_attente: "bg-amber-500" };
+const STATUT_DOT   = { paye: "bg-emerald-500", impaye: "bg-red-500", en_attente: "bg-amber-500" };
+
+const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin",
+              "Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
+
 type FilterTab = "tous" | "paye" | "impaye" | "en_attente";
 
 export default function EtudiantsPage() {
   const { currentUser } = useAuth();
-  const [students, setStudents] = useState<DBStudent[]>([]);
-  const [ecolages, setEcolages] = useState<DBEcolage[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Filters - all independent, never auto-reset
-  const [search, setSearch] = useState("");
-  const [filiereFilter, setFiliereFilter] = useState("Toutes");
-  const [statutTab, setStatutTab] = useState<FilterTab>("tous");
+  // Data
+  const [students,  setStudents]  = useState<DBStudent[]>([]);
+  const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
 
-  // Modals
-  const [profileStudent, setProfileStudent] = useState<DBStudent | null>(null);
-  const [ecolageStudent, setEcolageStudent] = useState<DBStudent | null>(null);
-  const [editEcolageData, setEditEcolageData] = useState<DBEcolage | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<DBEcolage | null>(null);
-
-  // Ecolage form - used for both create and edit
-  const [ecolageForm, setEcolageForm] = useState({
-    montantDu: "",
-    montantPaye: "",
-    annee: "2025/2026",
-    statut: "impaye" as "impaye" | "paye" | "en_attente",
-    note: "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const etabInfo = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
-  const isAdmin = currentUser?.role === "admin";
-  const etabColor = etabInfo?.color || "#2563eb";
-  const filieres = etabInfo ? etabInfo.filieres : [];
-
+  // Filters — stored in refs so reload never resets them
+  const [search,       setSearch]       = useState("");
+  const [filiereFilter,setFiliereFilter] = useState("Toutes");
+  const [statutTab,    setStatutTab]     = useState<FilterTab>("tous");
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Modals
+  const [profileStudent,  setProfileStudent]  = useState<DBStudent | null>(null);
+  const [ecolageStudent,  setEcolageStudent]  = useState<DBStudent | null>(null);
+  const [editEcolageData, setEditEcolageData] = useState<DBEcolage | null>(null);
+  const [deleteConfirm,   setDeleteConfirm]   = useState<DBEcolage | null>(null);
+
+  // Ecolage form — paiements par mois, pas de montant total
+  const [ecolageForm, setEcolageForm] = useState({
+    mois:       MOIS[new Date().getMonth()],
+    annee:      String(new Date().getFullYear()),
+    montant:    "",   // montant paye ce mois
+    note:       "",
+  });
+
+  const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
+  const isAdmin   = currentUser?.role === "admin";
+  const etabColor = etabInfo?.color || "#2563eb";
+  const filieres  = etabInfo ? etabInfo.filieres : [];
+
+  // Load data — NEVER resets filters
   const load = useCallback(async () => {
     setLoading(true);
     const [s, e] = await Promise.all([fetchStudents(), fetchEcolages()]);
@@ -74,83 +88,72 @@ export default function EtudiantsPage() {
   const getEcolage = (s: DBStudent) =>
     ecolages.find(e => e.etudiantId === getStudentId(s));
 
-  // Filtering - never resets automatically
+  // Filtering — purely derived, no side effects
   const filtered = students.filter(s => {
     const q = search.toLowerCase().trim();
     const name = getStudentName(s).toLowerCase();
-    const matchSearch = !q ||
+    const ok1 = !q ||
       name.includes(q) ||
       (s.matricule || "").toLowerCase().includes(q) ||
-      (s.email || "").toLowerCase().includes(q);
-    const matchFiliere =
-      filiereFilter === "Toutes" ||
+      (s.email    || "").toLowerCase().includes(q);
+    const ok2 = filiereFilter === "Toutes" ||
       (s.filiere || "").trim() === filiereFilter.trim();
-    const ec = getEcolage(s);
-    const statut = ec?.statut || "impaye";
-    const matchStatut = statutTab === "tous" || statut === statutTab;
-    return matchSearch && matchFiliere && matchStatut;
+    const ec  = getEcolage(s);
+    const st  = ec?.statut || "impaye";
+    const ok3 = statutTab === "tous" || st === statutTab;
+    return ok1 && ok2 && ok3;
   });
 
-  const resetFilters = () => {
-    setSearch("");
-    setFiliereFilter("Toutes");
-    setStatutTab("tous");
-    searchRef.current?.focus();
-  };
-
   // Stats
-  const countPaye = students.filter(s => getEcolage(s)?.statut === "paye").length;
-  const countImpaye = students.filter(s => !getEcolage(s) || getEcolage(s)?.statut === "impaye").length;
+  const countPaye    = students.filter(s => getEcolage(s)?.statut === "paye").length;
+  const countImpaye  = students.filter(s => !getEcolage(s) || getEcolage(s)?.statut === "impaye").length;
   const countPending = students.filter(s => getEcolage(s)?.statut === "en_attente").length;
-  const totalDu = ecolages.reduce((s, e) => s + e.montantDu, 0);
-  const totalPaye = ecolages.reduce((s, e) => s + e.montantPaye, 0);
+  const totalDu    = ecolages.reduce((a, e) => a + e.montantDu, 0);
+  const totalPaye2 = ecolages.reduce((a, e) => a + e.montantPaye, 0);
 
-  // Open ecolage modal for create
-  const openCreateEcolage = (s: DBStudent) => {
-    setEditEcolageData(null);
-    setEcolageForm({ montantDu: "", montantPaye: "", annee: "2025/2026", statut: "impaye", note: "" });
+  // Open ecolage modal
+  const openEcolage = (s: DBStudent, ec: DBEcolage | undefined) => {
     setEcolageStudent(s);
-  };
-
-  // Open ecolage modal for edit
-  const openEditEcolage = (ec: DBEcolage, s: DBStudent) => {
-    setEditEcolageData(ec);
+    setEditEcolageData(ec || null);
     setEcolageForm({
-      montantDu: String(ec.montantDu),
-      montantPaye: String(ec.montantPaye),
-      annee: ec.annee || "2025/2026",
-      statut: ec.statut,
-      note: "",
+      mois:    MOIS[new Date().getMonth()],
+      annee:   String(new Date().getFullYear()),
+      montant: "",
+      note:    "",
     });
-    setEcolageStudent(s);
   };
 
+  // Save payment for a student
   const handleSaveEcolage = async () => {
-    if (!ecolageStudent || !ecolageForm.montantDu) return;
+    if (!ecolageStudent || !ecolageForm.montant) return;
     setSaving(true);
-    const montantDu = Number(ecolageForm.montantDu);
-    const montantPaye = Number(ecolageForm.montantPaye) || 0;
-    // Auto-calculate statut based on amounts
-    let statut = ecolageForm.statut;
-    if (montantPaye >= montantDu && montantDu > 0) statut = "paye";
-    else if (montantPaye > 0) statut = "en_attente";
-    else statut = "impaye";
+    const montantCeMois = Number(ecolageForm.montant);
+    const ec = editEcolageData;
 
-    if (editEcolageData) {
-      const id = editEcolageData.id || editEcolageData._id || "";
-      await updateEcolage(id, { montantDu, montantPaye, statut, annee: ecolageForm.annee });
+    if (ec) {
+      // Add this month payment on top of existing
+      const newPaye = ec.montantPaye + montantCeMois;
+      const newStatut: "paye" | "impaye" | "en_attente" =
+        newPaye >= ec.montantDu ? "paye" :
+        newPaye > 0 ? "en_attente" : "impaye";
+      const id = ec.id || ec._id || "";
+      await updateEcolage(id, {
+        montantPaye: newPaye,
+        statut: newStatut,
+      });
     } else {
+      // First time — create with this as first payment, montantDu = montant for now
       await createEcolage({
-        etudiantId: getStudentId(ecolageStudent),
+        etudiantId:  getStudentId(ecolageStudent),
         etudiantNom: getStudentName(ecolageStudent),
-        matricule: ecolageStudent.matricule,
-        campus: ecolageStudent.campus || currentUser?.etablissement || "",
-        filiere: ecolageStudent.filiere || "",
-        classe: ecolageStudent.niveau || "L1",
-        montantDu,
-        montantPaye,
-        statut,
-        annee: ecolageForm.annee,
+        matricule:   ecolageStudent.matricule,
+        campus:      ecolageStudent.campus || currentUser?.etablissement || "",
+        filiere:     ecolageStudent.filiere || "",
+        classe:      ecolageStudent.niveau || "L1",
+        montantDu:   montantCeMois, // will be updated later
+        montantPaye: montantCeMois,
+        statut:      "en_attente",
+        annee:       `${ecolageForm.annee}`,
       });
     }
     await load();
@@ -169,20 +172,15 @@ export default function EtudiantsPage() {
     setDeleteConfirm(null);
   };
 
-  const STAT_TABS: { id: FilterTab; label: string; count: number; color: string; icon: React.ElementType }[] = [
-    { id: "tous", label: "Tous", count: students.length, color: "text-slate-700", icon: Users },
-    { id: "paye", label: "Payes", count: countPaye, color: "text-emerald-600", icon: CheckCircle2 },
-    { id: "impaye", label: "Impayes", count: countImpaye, color: "text-red-600", icon: AlertTriangle },
-    { id: "en_attente", label: "En attente", count: countPending, color: "text-amber-600", icon: Clock },
-  ];
-
+  // Avatar component
   const Avatar = ({ s, size = 9 }: { s: DBStudent; size?: number }) => {
     const name = getStudentName(s);
     const initials = name.split(" ").map(n => n[0] || "").join("").slice(0, 2).toUpperCase();
-    const sz = `w-${size} h-${size}`;
     return (
-      <div className={`${sz} rounded-full overflow-hidden shrink-0 border-2 border-white shadow-sm flex items-center justify-center text-white font-bold text-xs`}
-        style={{ background: etabColor }}>
+      <div
+        className={`w-${size} h-${size} rounded-full overflow-hidden shrink-0 flex items-center justify-center text-white font-bold text-xs border-2 border-white shadow-sm`}
+        style={{ background: etabColor }}
+      >
         {s.photo
           ? <img src={s.photo} alt={name} className="w-full h-full object-cover" />
           : initials}
@@ -190,21 +188,36 @@ export default function EtudiantsPage() {
     );
   };
 
+  const STAT_TABS: {
+    id: FilterTab; label: string; count: number;
+    color: string; active: string; icon: React.ElementType
+  }[] = [
+    { id: "tous",       label: "Tous",       count: students.length, color: "text-slate-700",   active: "border-slate-400",   icon: Users        },
+    { id: "paye",       label: "Payes",      count: countPaye,       color: "text-emerald-600", active: "border-emerald-400", icon: CheckCircle2 },
+    { id: "impaye",     label: "Impayes",    count: countImpaye,     color: "text-red-600",     active: "border-red-400",     icon: AlertTriangle},
+    { id: "en_attente", label: "En attente", count: countPending,    color: "text-amber-600",   active: "border-amber-400",   icon: Clock        },
+  ];
+
   return (
     <div className="space-y-5">
-      {/* Header */}
+
+      {/* ─── HEADER ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Etudiants</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {loading ? "Chargement..." : `${students.length} etudiants`}
-            {etabInfo && <span className="ml-2 font-medium" style={{ color: etabColor }}>— {etabInfo.label}</span>}
+            {etabInfo && (
+              <span className="ml-2 font-medium" style={{ color: etabColor }}>
+                — {etabInfo.label}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
           <button onClick={load}
             className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Actualiser
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
           <a href="https://groupegsi.mg/web/admincreat/" target="_blank" rel="noreferrer"
             className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md transition-colors"
@@ -214,41 +227,45 @@ export default function EtudiantsPage() {
         </div>
       </div>
 
-      {/* Stat filter tabs */}
+      {/* ─── STAT TABS ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {STAT_TABS.map(({ id, label, count, color, icon: Icon }) => (
+        {STAT_TABS.map(({ id, label, count, color, active, icon: Icon }) => (
           <button key={id} onClick={() => setStatutTab(id)}
-            className={clsx("card text-left transition-all border-2",
-              statutTab === id
-                ? "shadow-md border-current"
-                : "border-transparent hover:border-slate-200")}>
+            className={clsx(
+              "card text-left transition-all border-2",
+              statutTab === id ? `${active} shadow-md` : "border-transparent hover:border-slate-200"
+            )}>
             <div className="flex items-center gap-2 mb-1">
-              <Icon size={15} className={color} />
+              <Icon size={14} className={color} />
               <span className="text-xs text-slate-500 font-medium">{label}</span>
             </div>
             <div className={`text-2xl font-bold ${color}`}>{count}</div>
             {id === "tous" && (
-              <div className="text-xs text-slate-400 mt-0.5 truncate">{formatMGA(totalPaye)} / {formatMGA(totalDu)}</div>
+              <div className="text-xs text-slate-400 mt-0.5 truncate">
+                {formatMGA(totalPaye2)} / {formatMGA(totalDu)}
+              </div>
             )}
           </button>
         ))}
       </div>
 
-      {/* Search bar — always visible, never loses focus */}
+      {/* ─── SEARCH + FILIERE ─── */}
       <div className="card space-y-3">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        {/* Search — full width */}
+        <div className="relative w-full">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             ref={searchRef}
             type="text"
             placeholder="Rechercher par nom, matricule ou email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-10 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300 bg-white"
+            className="w-full pl-10 pr-10 py-3 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300 bg-white"
           />
           {search && (
-            <button onClick={() => { setSearch(""); searchRef.current?.focus(); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <button
+              onClick={() => { setSearch(""); searchRef.current?.focus(); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
               <X size={14} />
             </button>
           )}
@@ -256,7 +273,7 @@ export default function EtudiantsPage() {
 
         {/* Filiere chips */}
         {!isAdmin && filieres.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex gap-2 overflow-x-auto pb-0.5">
             {["Toutes", ...filieres].map(f => (
               <button key={f}
                 onClick={() => setFiliereFilter(f)}
@@ -264,43 +281,42 @@ export default function EtudiantsPage() {
                   "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap",
                   filiereFilter === f
                     ? "text-white border-transparent shadow-sm"
-                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                 )}
                 style={filiereFilter === f ? { background: etabColor } : {}}>
-                {f === "Toutes" ? "Toutes les filieres" : f.length > 22 ? f.slice(0, 22) + "..." : f}
+                {f === "Toutes" ? "Toutes" : f.length > 24 ? f.slice(0, 24) + "…" : f}
               </button>
             ))}
           </div>
         )}
 
-        {/* Active filters summary */}
-        {(search || filiereFilter !== "Toutes" || statutTab !== "tous") && (
-          <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-            <span className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-800">{filtered.length}</span> resultat(s) avec les filtres actifs
-            </span>
-            <button onClick={resetFilters}
-              className="text-xs text-brand-600 hover:underline flex items-center gap-1 font-medium">
-              <X size={11} /> Tout reinitialiser
+        {/* Result count */}
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span>{filtered.length} resultat(s) sur {students.length}</span>
+          {(search || filiereFilter !== "Toutes" || statutTab !== "tous") && (
+            <button
+              onClick={() => { setSearch(""); setFiliereFilter("Toutes"); setStatutTab("tous"); }}
+              className="text-brand-600 hover:underline flex items-center gap-1 font-medium">
+              <X size={11} /> Reinitialiser
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Table */}
+      {/* ─── TABLE ─── */}
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center">
-            <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-3"
+          <div className="py-16 text-center space-y-3">
+            <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mx-auto"
               style={{ borderColor: etabColor, borderTopColor: "transparent" }} />
-            <p className="text-slate-400 text-sm">Chargement depuis la base de donnees...</p>
+            <p className="text-slate-400 text-sm">Chargement depuis la base de donnees…</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-slate-400 space-y-3">
             <Users size={36} className="mx-auto opacity-20" />
-            <p className="text-sm font-medium">Aucun etudiant trouve</p>
-            <button onClick={resetFilters}
-              className="text-xs text-brand-600 hover:underline font-medium">
+            <p className="text-sm">Aucun etudiant trouve</p>
+            <button onClick={() => { setSearch(""); setFiliereFilter("Toutes"); setStatutTab("tous"); }}
+              className="text-xs text-brand-600 hover:underline">
               Reinitialiser les filtres
             </button>
           </div>
@@ -311,7 +327,7 @@ export default function EtudiantsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
-                    {["Etudiant", "Filiere / Campus", "Niveau", "Ecolage", "Statut", "Actions"].map(h => (
+                    {["Etudiant", "Filiere", "Niveau", "Ecolage", "Statut", "Actions"].map(h => (
                       <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -331,7 +347,7 @@ export default function EtudiantsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-[160px]">
+                        <td className="px-4 py-3 max-w-[180px]">
                           <div className="text-xs text-slate-600 truncate">{s.filiere || "—"}</div>
                           <div className="text-xs text-slate-400 truncate">{s.campus || "—"}</div>
                         </td>
@@ -342,22 +358,30 @@ export default function EtudiantsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
-                          {ec ? (
+                        <td className="px-4 py-3 min-w-[140px]">
+                          {ec && ec.montantDu > 0 ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="font-semibold text-slate-700">{formatMGA(ec.montantDu)}</div>
-                              <div className="text-emerald-600">Paye: {formatMGA(ec.montantPaye)}</div>
+                              <div className="font-semibold text-slate-700">
+                                Total: {formatMGA(ec.montantDu)}
+                              </div>
+                              <div className="text-emerald-600">
+                                Paye: {formatMGA(ec.montantPaye)}
+                              </div>
                               {ec.montantDu > ec.montantPaye && (
-                                <div className="text-red-500">Reste: {formatMGA(ec.montantDu - ec.montantPaye)}</div>
+                                <div className="text-red-500 font-medium">
+                                  Reste: {formatMGA(ec.montantDu - ec.montantPaye)}
+                                </div>
                               )}
-                              {ec.annee && <div className="text-slate-300">{ec.annee}</div>}
                             </div>
                           ) : (
                             <span className="text-slate-300 text-xs italic">Non defini</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={clsx("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold", STATUT_COLORS[statut])}>
+                          <span className={clsx(
+                            "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold",
+                            STATUT_COLORS[statut]
+                          )}>
                             <span className={clsx("w-1.5 h-1.5 rounded-full", STATUT_DOT[statut])} />
                             {STATUT_LABELS[statut]}
                           </span>
@@ -368,13 +392,11 @@ export default function EtudiantsPage() {
                               className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all border border-transparent hover:border-brand-200">
                               <Info size={14} />
                             </button>
-                            <button
-                              onClick={() => ec ? openEditEcolage(ec, s) : openCreateEcolage(s)}
-                              title={ec ? "Modifier ecolage" : "Definir ecolage"}
+                            <button onClick={() => openEcolage(s, ec)} title="Enregistrer paiement"
                               className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200">
                               <CreditCard size={14} />
                             </button>
-                            {ec && (
+                            {ec && ec.montantDu > 0 && (
                               <button onClick={() => setDeleteConfirm(ec)} title="Supprimer ecolage"
                                 className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-200">
                                 <Trash2 size={14} />
@@ -395,8 +417,8 @@ export default function EtudiantsPage() {
                 const ec = getEcolage(s);
                 const statut = ec?.statut || "impaye";
                 return (
-                  <div key={getStudentId(s)} className="p-4">
-                    <div className="flex items-start justify-between gap-2 mb-2">
+                  <div key={getStudentId(s)} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
                         <Avatar s={s} size={11} />
                         <div>
@@ -404,31 +426,36 @@ export default function EtudiantsPage() {
                           <div className="text-xs text-slate-400 font-mono">{s.matricule || "—"}</div>
                         </div>
                       </div>
-                      <span className={clsx("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shrink-0", STATUT_COLORS[statut])}>
+                      <span className={clsx(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shrink-0",
+                        STATUT_COLORS[statut]
+                      )}>
                         <span className={clsx("w-1.5 h-1.5 rounded-full", STATUT_DOT[statut])} />
                         {STATUT_LABELS[statut]}
                       </span>
                     </div>
-                    {s.filiere && <div className="text-xs text-slate-500 truncate mb-1.5">{s.filiere}</div>}
-                    {ec && (
-                      <div className="flex gap-3 text-xs mb-2">
-                        <span className="text-slate-500">Du: <span className="font-bold text-slate-700">{formatMGA(ec.montantDu)}</span></span>
+                    {s.filiere && (
+                      <div className="text-xs text-slate-500 truncate">{s.filiere}</div>
+                    )}
+                    {ec && ec.montantDu > 0 && (
+                      <div className="flex flex-wrap gap-3 text-xs">
+                        <span className="text-slate-500">Total: <span className="font-bold text-slate-700">{formatMGA(ec.montantDu)}</span></span>
                         <span className="text-emerald-600 font-bold">{formatMGA(ec.montantPaye)} paye</span>
                         {ec.montantDu > ec.montantPaye && (
-                          <span className="text-red-500">Reste: {formatMGA(ec.montantDu - ec.montantPaye)}</span>
+                          <span className="text-red-500 font-bold">Reste: {formatMGA(ec.montantDu - ec.montantPaye)}</span>
                         )}
                       </div>
                     )}
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap pt-1">
                       <button onClick={() => setProfileStudent(s)}
                         className="flex items-center gap-1 text-xs text-slate-500 border border-slate-200 px-2.5 py-1.5 rounded-lg hover:bg-slate-50">
                         <Info size={12} /> Profil
                       </button>
-                      <button onClick={() => ec ? openEditEcolage(ec, s) : openCreateEcolage(s)}
+                      <button onClick={() => openEcolage(s, ec)}
                         className="flex items-center gap-1 text-xs text-emerald-600 border border-emerald-200 px-2.5 py-1.5 rounded-lg hover:bg-emerald-50">
-                        <CreditCard size={12} /> {ec ? "Modifier" : "Definir ecolage"}
+                        <CreditCard size={12} /> Paiement
                       </button>
-                      {ec && (
+                      {ec && ec.montantDu > 0 && (
                         <button onClick={() => setDeleteConfirm(ec)}
                           className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50">
                           <Trash2 size={12} /> Supprimer
@@ -443,18 +470,17 @@ export default function EtudiantsPage() {
         )}
       </div>
 
-      <p className="text-xs text-slate-400 text-right">{filtered.length} resultat(s) sur {students.length} — groupegsi.mg</p>
-
       {/* ─── PROFILE MODAL ─── */}
       {profileStudent && (() => {
         const ec = getEcolage(profileStudent);
         const statut = ec?.statut || "impaye";
         const name = getStudentName(profileStudent);
+        const initials = name.split(" ").map(n => n[0] || "").join("").slice(0, 2).toUpperCase();
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
               <div className="relative h-28 flex items-end px-6"
-                style={{ background: `linear-gradient(135deg,${etabColor}dd,${etabColor}88)` }}>
+                style={{ background: `linear-gradient(135deg,${etabColor}dd,${etabColor}66)` }}>
                 <button onClick={() => setProfileStudent(null)}
                   className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white">
                   <X size={14} />
@@ -463,30 +489,27 @@ export default function EtudiantsPage() {
                   style={{ background: etabColor }}>
                   {profileStudent.photo
                     ? <img src={profileStudent.photo} alt={name} className="w-full h-full object-cover" />
-                    : name.split(" ").map(n => n[0] || "").join("").slice(0, 2).toUpperCase()
-                  }
+                    : initials}
                 </div>
               </div>
-
               <div className="pt-10 px-6 pb-6 space-y-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">{name}</h2>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">{profileStudent.matricule || "—"}</p>
+                    <p className="text-xs text-slate-400 font-mono">{profileStudent.matricule || "—"}</p>
                   </div>
                   <span className={clsx("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 mt-1", STATUT_COLORS[statut])}>
                     <span className={clsx("w-1.5 h-1.5 rounded-full", STATUT_DOT[statut])} />
                     {STATUT_LABELS[statut]}
                   </span>
                 </div>
-
                 <div className="space-y-2.5">
                   {[
-                    { icon: Mail, label: "Email", value: profileStudent.email || "—" },
-                    { icon: Phone, label: "Contact", value: profileStudent.contact || profileStudent.telephone || "—" },
-                    { icon: MapPin, label: "Campus", value: profileStudent.campus || "—" },
-                    { icon: GraduationCap, label: "Filiere", value: profileStudent.filiere || "—" },
-                    { icon: Calendar, label: "Niveau", value: profileStudent.niveau || "—" },
+                    { icon: Mail,          label: "Email",   value: profileStudent.email    || "—" },
+                    { icon: Phone,         label: "Contact", value: profileStudent.contact  || profileStudent.telephone || "—" },
+                    { icon: MapPin,        label: "Campus",  value: profileStudent.campus   || "—" },
+                    { icon: GraduationCap, label: "Filiere", value: profileStudent.filiere  || "—" },
+                    { icon: Calendar,      label: "Niveau",  value: profileStudent.niveau   || "—" },
                   ].map(({ icon: Icon, label, value }) => (
                     <div key={label} className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -500,30 +523,24 @@ export default function EtudiantsPage() {
                   ))}
                 </div>
 
-                {/* Ecolage summary */}
+                {/* Ecolage box */}
                 <div className="rounded-2xl border border-slate-100 overflow-hidden">
                   <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Ecolage</span>
-                    {ec && (
-                      <div className="flex gap-2">
-                        <button onClick={() => { openEditEcolage(ec, profileStudent); setProfileStudent(null); }}
-                          className="text-xs text-amber-600 flex items-center gap-0.5 hover:underline">
-                          <Edit3 size={11} /> Modifier
-                        </button>
-                        <span className="text-slate-300">·</span>
-                        <button onClick={() => { setDeleteConfirm(ec); setProfileStudent(null); }}
-                          className="text-xs text-red-500 flex items-center gap-0.5 hover:underline">
-                          <Trash2 size={11} /> Supprimer
-                        </button>
-                      </div>
+                    {ec && ec.montantDu > 0 && (
+                      <button onClick={() => { setDeleteConfirm(ec); setProfileStudent(null); }}
+                        className="text-xs text-red-500 flex items-center gap-0.5 hover:underline">
+                        <Trash2 size={11} /> Supprimer
+                      </button>
                     )}
                   </div>
-                  {ec ? (
+                  {ec && ec.montantDu > 0 ? (
                     <div className="px-4 py-3 grid grid-cols-3 gap-3 text-center">
                       {[
-                        { label: "Total du", value: formatMGA(ec.montantDu), color: "text-slate-700" },
-                        { label: "Paye", value: formatMGA(ec.montantPaye), color: "text-emerald-600" },
-                        { label: "Reste", value: formatMGA(ec.montantDu - ec.montantPaye), color: ec.montantDu > ec.montantPaye ? "text-red-600" : "text-emerald-600" },
+                        { label: "Total du",  value: formatMGA(ec.montantDu),              color: "text-slate-700"  },
+                        { label: "Paye",      value: formatMGA(ec.montantPaye),             color: "text-emerald-600" },
+                        { label: "Reste",     value: formatMGA(ec.montantDu-ec.montantPaye),
+                          color: ec.montantDu > ec.montantPaye ? "text-red-600" : "text-emerald-600" },
                       ].map(({ label, value, color }) => (
                         <div key={label}>
                           <div className={`text-sm font-bold ${color}`}>{value}</div>
@@ -542,14 +559,10 @@ export default function EtudiantsPage() {
                     Fermer
                   </button>
                   <button
-                    onClick={() => {
-                      const s = profileStudent;
-                      setProfileStudent(null);
-                      ec ? openEditEcolage(ec, s) : openCreateEcolage(s);
-                    }}
-                    className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold"
+                    onClick={() => { openEcolage(profileStudent, ec); setProfileStudent(null); }}
+                    className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"
                     style={{ background: etabColor }}>
-                    {ec ? "Modifier ecolage" : "Definir ecolage"}
+                    <Plus size={14} /> Enregistrer paiement
                   </button>
                 </div>
               </div>
@@ -558,18 +571,14 @@ export default function EtudiantsPage() {
         );
       })()}
 
-      {/* ─── ECOLAGE MODAL (Create + Edit) ─── */}
+      {/* ─── ECOLAGE / PAYMENT MODAL ─── */}
       {ecolageStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  {editEcolageData ? "Modifier l'ecolage" : "Definir l'ecolage"}
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {editEcolageData ? "Mettez a jour les montants" : "Enregistrer le montant d'ecolage"}
-                </p>
+                <h2 className="text-lg font-bold text-slate-900">Enregistrer un paiement</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Paiement mensuel de l'ecolage</p>
               </div>
               <button onClick={() => { setEcolageStudent(null); setEditEcolageData(null); }}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100">
@@ -582,74 +591,112 @@ export default function EtudiantsPage() {
               <Avatar s={ecolageStudent} size={11} />
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-slate-900 text-sm">{getStudentName(ecolageStudent)}</div>
-                <div className="text-xs text-slate-400 truncate">{ecolageStudent.filiere} · {ecolageStudent.niveau}</div>
+                <div className="text-xs text-slate-400 truncate">{ecolageStudent.filiere}</div>
                 <div className="text-xs font-mono text-slate-400">{ecolageStudent.matricule}</div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              {/* Montant total */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Montant total de l'ecolage (Ar) <span className="text-red-500">*</span>
-                </label>
-                <input type="number" placeholder="Ex: 1200000"
-                  value={ecolageForm.montantDu}
-                  onChange={e => setEcolageForm(f => ({ ...f, montantDu: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
-              </div>
-
-              {/* Montant deja paye - optionnel */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">
-                  Montant deja paye (Ar)
-                  <span className="text-slate-400 font-normal ml-1">— optionnel, si paiement partiel</span>
-                </label>
-                <input type="number" placeholder="0 si rien n'a ete paye"
-                  value={ecolageForm.montantPaye}
-                  onChange={e => setEcolageForm(f => ({ ...f, montantPaye: e.target.value }))}
-                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
-                {ecolageForm.montantDu && (
-                  <div className="mt-1.5 flex gap-3 text-xs">
-                    <span className="text-emerald-600">Paye: {formatMGA(Number(ecolageForm.montantPaye) || 0)}</span>
-                    <span className="text-red-500">Reste: {formatMGA(Math.max(0, Number(ecolageForm.montantDu) - (Number(ecolageForm.montantPaye) || 0)))}</span>
+            {/* Ecolage status */}
+            {editEcolageData && editEcolageData.montantDu > 0 && (
+              <div className={clsx("rounded-xl px-4 py-3 border",
+                editEcolageData.montantDu > editEcolageData.montantPaye
+                  ? "bg-amber-50 border-amber-100"
+                  : "bg-emerald-50 border-emerald-100")}>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-slate-500 font-medium">Situation actuelle</span>
+                  <span className={clsx("font-bold px-2 py-0.5 rounded-full text-xs",
+                    STATUT_COLORS[editEcolageData.statut])}>
+                    {STATUT_LABELS[editEcolageData.statut]}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-center">
+                  <div>
+                    <div className="font-bold text-slate-700">{formatMGA(editEcolageData.montantDu)}</div>
+                    <div className="text-slate-400">Total</div>
                   </div>
-                )}
+                  <div>
+                    <div className="font-bold text-emerald-600">{formatMGA(editEcolageData.montantPaye)}</div>
+                    <div className="text-slate-400">Paye</div>
+                  </div>
+                  <div>
+                    <div className={clsx("font-bold", editEcolageData.montantDu > editEcolageData.montantPaye ? "text-red-600" : "text-emerald-600")}>
+                      {formatMGA(editEcolageData.montantDu - editEcolageData.montantPaye)}
+                    </div>
+                    <div className="text-slate-400">Reste</div>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Annee scolaire */}
+            {/* Month + Year */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1">Annee scolaire</label>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Mois</label>
                 <div className="relative">
-                  <select value={ecolageForm.annee}
-                    onChange={e => setEcolageForm(f => ({ ...f, annee: e.target.value }))}
+                  <select value={ecolageForm.mois}
+                    onChange={e => setEcolageForm(f => ({ ...f, mois: e.target.value }))}
                     className="appearance-none w-full px-3 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                    <option>2024/2025</option>
-                    <option>2025/2026</option>
-                    <option>2026/2027</option>
+                    {MOIS.map(m => <option key={m}>{m}</option>)}
                   </select>
                   <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
               </div>
-
-              {/* Statut auto-calcule */}
-              {ecolageForm.montantDu && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-xs text-blue-700 flex items-center gap-2">
-                  <CheckCircle2 size={13} />
-                  Statut calcule automatiquement selon les montants
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Annee</label>
+                <div className="relative">
+                  <select value={ecolageForm.annee}
+                    onChange={e => setEcolageForm(f => ({ ...f, annee: e.target.value }))}
+                    className="appearance-none w-full px-3 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
+                    {["2025","2026","2027"].map(y => <option key={y}>{y}</option>)}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
-              )}
+              </div>
             </div>
 
-            <div className="flex gap-3 pt-1">
+            {/* Amount */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                Montant paye ce mois (Ar) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                placeholder="Ex: 150000"
+                value={ecolageForm.montant}
+                onChange={e => setEcolageForm(f => ({ ...f, montant: e.target.value }))}
+                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300"
+                autoFocus
+              />
+            </div>
+
+            {/* Note */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Note (optionnel)</label>
+              <input type="text" placeholder="Ex: 1ere tranche, complement..."
+                value={ecolageForm.note}
+                onChange={e => setEcolageForm(f => ({ ...f, note: e.target.value }))}
+                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+            </div>
+
+            {/* Agent */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2 text-xs text-blue-700">
+              Agent: <span className="font-bold">{currentUser?.prenom} {currentUser?.nom}</span>
+              <span className="mx-1.5 text-blue-300">·</span>
+              {ecolageForm.mois} {ecolageForm.annee}
+            </div>
+
+            <div className="flex gap-3">
               <button onClick={() => { setEcolageStudent(null); setEditEcolageData(null); }}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
                 Annuler
               </button>
-              <button onClick={handleSaveEcolage} disabled={saving || !ecolageForm.montantDu}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+              <button onClick={handleSaveEcolage}
+                disabled={saving || !ecolageForm.montant}
+                className="flex-1 py-3 rounded-xl text-white text-sm font-bold disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                 style={{ background: etabColor }}>
-                {saving ? "Enregistrement..." : editEcolageData ? "Modifier" : "Enregistrer"}
+                {saving
+                  ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Enregistrement…</>
+                  : <><CreditCard size={15} />Enregistrer</>}
               </button>
             </div>
           </div>
@@ -665,7 +712,9 @@ export default function EtudiantsPage() {
             </div>
             <div className="text-center space-y-1">
               <h2 className="text-lg font-bold text-slate-900">Supprimer cet ecolage ?</h2>
-              <p className="text-sm text-slate-500">Cette action reinitialise le montant a zero. Les paiements deja enregistres restent conserves.</p>
+              <p className="text-sm text-slate-500">
+                Les montants seront reinitialises a zero. Les paiements deja enregistres restent conserves.
+              </p>
             </div>
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center space-y-0.5">
               <div className="font-bold text-slate-900">{deleteConfirm.etudiantNom}</div>
@@ -674,15 +723,14 @@ export default function EtudiantsPage() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)}
-                className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
                 Non, annuler
               </button>
               <button onClick={handleDeleteEcolage} disabled={deleting}
-                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold disabled:opacity-60 flex items-center justify-center gap-2">
                 {deleting
-                  ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Suppression...</>
-                  : <><Trash2 size={15} />Oui, supprimer</>
-                }
+                  ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Suppression…</>
+                  : <><Trash2 size={15} />Oui, supprimer</>}
               </button>
             </div>
           </div>
