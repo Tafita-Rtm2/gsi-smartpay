@@ -40,7 +40,7 @@ export default function AdminPage() {
     if (appState.users.find(u => u.username === form.username)) {
       setFormError("Ce nom d'utilisateur existe deja"); return;
     }
-    createUser({ ...form, createdBy: "admin" });
+    createUser({ ...form });
     setShowCreateUser(false);
     setForm({ username: "", password: "", nom: "", prenom: "", role: "comptable", etablissement: "analakely", actif: true });
     setFormError("");
