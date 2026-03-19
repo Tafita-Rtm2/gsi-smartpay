@@ -70,7 +70,6 @@ export interface DBPaiement {
 }
 
 // ─── Parse response ───────────────────────────────────────────────────────────
-  if (!data) return [];
   if (Array.isArray(data)) return data as T[];
   for (const key of ["data","documents","results","items","records","list"]) {
     if (Array.isArray(data[key])) return data[key] as T[];
