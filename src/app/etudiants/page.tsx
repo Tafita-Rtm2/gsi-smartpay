@@ -150,15 +150,22 @@ export default function EtudiantsPage() {
     setDeleting(true);
     const id = deletePaiement.id || deletePaiement._id || "";
     if (id) {
+      // Delete from paiements collection
       await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" }).catch(() => {});
+      // Update ecolage - subtract montant and recalculate status
       const ec = ecolages.find(e => e.etudiantId === deletePaiement.etudiantId);
       if (ec && (ec.id || ec._id)) {
         const newPaye = Math.max(0, ec.montantPaye - deletePaiement.montant);
-        const st: "paye"|"impaye"|"en_attente" = newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+        // If nothing left paid -> impaye, if partial -> en_attente, if full -> paye
+        const st: "paye"|"impaye"|"en_attente" =
+          newPaye <= 0 ? "impaye" :
+          newPaye >= ec.montantDu ? "paye" : "en_attente";
         await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
       }
     }
-    await load(); setDeleting(false); setDeletePaiement(null);
+    await load();
+    setDeleting(false);
+    setDeletePaiement(null);
   };
 
   const Avatar = ({ s, size = 36 }: { s: DBStudent; size?: number }) => {
@@ -643,7 +650,12 @@ export default function EtudiantsPage() {
                 </button>
                 <button
                   onClick={() => {
-                    window.print();
+                    const el = document.getElementById("receipt-print-area");
+                    if (el) {
+                      el.style.display = "block";
+                      window.print();
+                      setTimeout(() => { el.style.display = "none"; }, 1500);
+                    }
                   }}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-colors"
                   style={{background:etabColor}}>

@@ -25,19 +25,20 @@ body {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 
   @page {
-    size: A5 portrait;
-    margin: 10mm;
+    size: A4 portrait;
+    margin: 12mm;
   }
 
-  /* Hide everything */
+  /* Hide everything on the page */
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
 
-  /* Show only receipt */
+  /* Only show the print area */
   #receipt-print-area,
   #receipt-print-area * {
     visibility: visible !important;
@@ -45,9 +46,10 @@ body {
 
   #receipt-print-area {
     position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
+    inset: 0 !important;
     background: white !important;
+    z-index: 999999 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
 }
