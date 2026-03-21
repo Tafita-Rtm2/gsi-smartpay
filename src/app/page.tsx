@@ -30,14 +30,11 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 500));
     const result = login(username, password, etab);
     setLoading(false);
-    if (result.ok) {
-      router.push("/dashboard");
-    } else {
-      setError(result.error || "Erreur de connexion");
-    }
+    if (result.ok) router.push("/dashboard");
+    else setError(result.error || "Erreur de connexion");
   };
 
   const handleAdminAccess = () => {
@@ -57,13 +54,11 @@ export default function LoginPage() {
       style={{ background: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, ${etabInfo.color}22 100%)` }}>
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/4"
-          style={{ background: etabInfo.color }} />
-        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-10 translate-y-1/2 -translate-x-1/4"
-          style={{ background: etabInfo.color }} />
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/4" style={{ background: etabInfo.color }} />
+        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-10 translate-y-1/2 -translate-x-1/4" style={{ background: etabInfo.color }} />
       </div>
 
-      {/* Admin button */}
+      {/* Admin button - top right */}
       <button onClick={() => setShowAdminModal(true)}
         className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all">
         <Shield size={14} />
@@ -78,25 +73,24 @@ export default function LoginPage() {
             <GraduationCap size={32} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white">GSI SmartPay</h1>
-          <p className="text-white/40 text-sm mt-1">Gestion des écolages</p>
+          <p className="text-white/40 text-sm mt-1">Gestion des ecolages</p>
         </div>
 
         {/* Etablissement tabs */}
-        <div className="grid grid-cols-4 gap-1 bg-white/5 border border-white/10 rounded-2xl p-1 mb-6">
+        <div className="grid grid-cols-4 gap-1 bg-white/5 border border-white/10 rounded-2xl p-1 mb-5">
           {ETABS.map(({ id, short }) => (
             <button key={id} onClick={() => { setEtab(id); setError(""); }}
               className={clsx("py-2.5 rounded-xl text-xs font-bold transition-all",
-                etab === id ? "text-white shadow-lg" : "text-white/40 hover:text-white/60"
-              )}
+                etab === id ? "text-white shadow-lg" : "text-white/40 hover:text-white/60")}
               style={etab === id ? { background: ETABLISSEMENTS[id].color } : {}}>
               {short}
             </button>
           ))}
         </div>
 
-        <p className="text-center text-white/50 text-xs mb-5 font-medium">{etabInfo.label}</p>
+        <p className="text-center text-white/50 text-xs mb-4 font-medium">{etabInfo.label}</p>
 
-        {/* Card */}
+        {/* Login card */}
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-7 shadow-2xl">
           <h2 className="text-white font-bold text-lg mb-5">Connexion</h2>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -123,9 +117,7 @@ export default function LoginPage() {
               </div>
             </div>
             {error && (
-              <div className="bg-red-500/20 border border-red-400/30 rounded-xl px-4 py-2.5 text-red-300 text-xs">
-                {error}
-              </div>
+              <div className="bg-red-500/20 border border-red-400/30 rounded-xl px-4 py-2.5 text-red-300 text-xs">{error}</div>
             )}
             <button type="submit" disabled={loading}
               className="w-full py-3 rounded-xl text-white font-bold text-sm transition-all shadow-lg disabled:opacity-60 mt-1"
@@ -138,9 +130,6 @@ export default function LoginPage() {
               ) : "Se connecter"}
             </button>
           </form>
-          <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/10 text-center">
-            <p className="text-xs text-white/25">Demo: comptable.analakely / gsi2024</p>
-          </div>
         </div>
       </div>
 
@@ -154,7 +143,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <h2 className="text-white font-bold">Panneau Administrateur</h2>
-                <p className="text-white/40 text-xs">Accès sécurisé</p>
+                <p className="text-white/40 text-xs">Acces securise</p>
               </div>
             </div>
             <div className="mb-4">
@@ -175,7 +164,7 @@ export default function LoginPage() {
               </button>
               <button onClick={handleAdminAccess}
                 className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-bold transition-colors">
-                Accéder
+                Acceder
               </button>
             </div>
           </div>

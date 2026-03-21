@@ -546,57 +546,116 @@ export default function EtudiantsPage() {
 
       {/* ─── RECEIPT MODAL ─── */}
       {receiptPaiement && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" id="receipt-print">
-            <div className="rounded-t-2xl px-6 py-5 text-white" style={{background:etabColor}}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="font-bold text-lg">GSI SmartPay</div>
-                <div className="text-xs opacity-70">RECU OFFICIEL</div>
-              </div>
-              <div className="text-xs opacity-70">{etabInfo?.label}</div>
-            </div>
-            <div className="px-6 py-5 space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Reference</span>
-                <span className="font-mono font-bold text-slate-900">{receiptPaiement.reference || "—"}</span>
-              </div>
-              <div className="h-px bg-slate-100" />
-              {[
-                { label: "Etudiant", value: receiptPaiement.etudiantNom },
-                { label: "Matricule", value: receiptPaiement.matricule || "—" },
-                { label: "Filiere",  value: `${receiptPaiement.filiere||"—"} ${receiptPaiement.classe ? "— "+receiptPaiement.classe : ""}` },
-                { label: "Date",     value: receiptPaiement.date },
-                { label: "Mode",     value: receiptPaiement.mode },
-                { label: "Note",     value: receiptPaiement.note || "—" },
-                { label: "Agent",    value: receiptPaiement.agentNom },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between gap-2 text-sm">
-                  <span className="text-slate-500 shrink-0">{label}</span>
-                  <span className="font-medium text-slate-900 text-right text-xs truncate">{value}</span>
+        <>
+          {/* Print area - hidden normally, shown when printing */}
+          <div id="receipt-print-area" style={{display:"none"}}>
+            <div style={{fontFamily:"Arial,sans-serif",maxWidth:"400px",margin:"0 auto",padding:"20px"}}>
+              <div style={{background:etabColor,color:"white",padding:"20px",borderRadius:"12px 12px 0 0"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                  <div style={{fontWeight:"bold",fontSize:"18px"}}>GSI SmartPay</div>
+                  <div style={{fontSize:"12px",opacity:0.8}}>RECU OFFICIEL</div>
                 </div>
-              ))}
-              <div className="h-px bg-slate-100" />
-              <div className="flex justify-between items-center">
-                <span className="text-slate-600 font-semibold">Montant paye</span>
-                <span className="text-2xl font-bold" style={{color:etabColor}}>{formatMGA(receiptPaiement.montant)}</span>
+                <div style={{fontSize:"12px",opacity:0.7}}>{etabInfo?.label}</div>
               </div>
-              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2 text-center">
-                <span className="text-emerald-700 font-bold text-sm">✓ Paiement confirme</span>
+              <div style={{border:"1px solid #e2e8f0",borderTop:"none",padding:"20px",borderRadius:"0 0 12px 12px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"12px",paddingBottom:"12px",borderBottom:"1px solid #f1f5f9"}}>
+                  <span style={{color:"#64748b",fontSize:"13px"}}>Reference</span>
+                  <span style={{fontFamily:"monospace",fontWeight:"bold",fontSize:"13px"}}>{receiptPaiement.reference || "—"}</span>
+                </div>
+                {[
+                  { label: "Etudiant",  value: receiptPaiement.etudiantNom },
+                  { label: "Matricule", value: receiptPaiement.matricule || "—" },
+                  { label: "Filiere",   value: receiptPaiement.filiere || "—" },
+                  { label: "Niveau",    value: receiptPaiement.classe || "—" },
+                  { label: "Date",      value: receiptPaiement.date },
+                  { label: "Mode",      value: receiptPaiement.mode },
+                  { label: "Note",      value: receiptPaiement.note || "—" },
+                  { label: "Agent",     value: receiptPaiement.agentNom },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{display:"flex",justifyContent:"space-between",marginBottom:"8px"}}>
+                    <span style={{color:"#64748b",fontSize:"12px"}}>{label}</span>
+                    <span style={{fontWeight:"500",fontSize:"12px",textAlign:"right",maxWidth:"60%"}}>{value}</span>
+                  </div>
+                ))}
+                <div style={{borderTop:"2px solid #f1f5f9",marginTop:"12px",paddingTop:"12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontWeight:"600",color:"#334155"}}>Montant paye</span>
+                  <span style={{fontSize:"24px",fontWeight:"bold",color:etabColor}}>{formatMGA(receiptPaiement.montant)}</span>
+                </div>
+                <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:"8px",padding:"10px",textAlign:"center",marginTop:"12px"}}>
+                  <span style={{color:"#15803d",fontWeight:"bold",fontSize:"14px"}}>✓ Paiement confirme</span>
+                </div>
+                <div style={{textAlign:"center",marginTop:"16px",color:"#94a3b8",fontSize:"11px"}}>
+                  Document genere par GSI SmartPay — {new Date().toLocaleDateString("fr-FR")}
+                </div>
               </div>
-            </div>
-            <div className="px-6 pb-5 flex gap-3">
-              <button onClick={() => setReceiptPaiement(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">
-                Fermer
-              </button>
-              <button onClick={() => window.print()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold"
-                style={{background:etabColor}}>
-                <Printer size={14} /> Imprimer
-              </button>
             </div>
           </div>
-        </div>
+
+          {/* Screen modal */}
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+              {/* Header */}
+              <div className="px-6 py-5 text-white" style={{background:etabColor}}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-bold text-lg">GSI SmartPay</div>
+                  <div className="text-xs opacity-70">RECU OFFICIEL</div>
+                </div>
+                <div className="text-xs opacity-70">{etabInfo?.label}</div>
+              </div>
+
+              {/* Body */}
+              <div className="px-6 py-5 space-y-3 max-h-[60vh] overflow-y-auto">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Reference</span>
+                  <span className="font-mono font-bold text-slate-900">{receiptPaiement.reference || "—"}</span>
+                </div>
+                <div className="h-px bg-slate-100" />
+                {[
+                  { label: "Etudiant",  value: receiptPaiement.etudiantNom },
+                  { label: "Matricule", value: receiptPaiement.matricule || "—" },
+                  { label: "Filiere",   value: receiptPaiement.filiere || "—" },
+                  { label: "Niveau",    value: receiptPaiement.classe || "—" },
+                  { label: "Date",      value: receiptPaiement.date },
+                  { label: "Mode",      value: receiptPaiement.mode },
+                  { label: "Note",      value: receiptPaiement.note || "—" },
+                  { label: "Agent",     value: receiptPaiement.agentNom },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between gap-2">
+                    <span className="text-slate-500 text-sm shrink-0">{label}</span>
+                    <span className="font-medium text-slate-900 text-sm text-right truncate max-w-[55%]">{value}</span>
+                  </div>
+                ))}
+                <div className="h-px bg-slate-100" />
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-semibold">Montant paye</span>
+                  <span className="text-2xl font-bold" style={{color:etabColor}}>{formatMGA(receiptPaiement.montant)}</span>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5 text-center">
+                  <span className="text-emerald-700 font-bold text-sm">✓ Paiement confirme</span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="px-6 pb-5 flex gap-3">
+                <button onClick={() => setReceiptPaiement(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                  Fermer
+                </button>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("receipt-print-area");
+                    if (el) el.style.display = "block";
+                    window.print();
+                    setTimeout(() => { if (el) el.style.display = "none"; }, 1000);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-colors"
+                  style={{background:etabColor}}>
+                  <Printer size={14} /> Imprimer / PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ─── PAYMENT MODAL ─── */}
