@@ -2,53 +2,18 @@
 
 export type Etablissement = "analakely" | "antsirabe" | "tamatave" | "bypass";
 export type Role = "admin" | "comptable" | "agent";
-export type PaymentStatus = "paye" | "impaye" | "en_attente";
-export type PaymentMode = "especes" | "MVola" | "Orange Money" | "Airtel Money" | "virement";
 
 export interface User {
   id: string;
   username: string;
-  password: string; // in real app: hashed
+  password: string;
   nom: string;
   prenom: string;
   role: Role;
   etablissement: Etablissement;
   actif: boolean;
   createdAt: string;
-  createdBy: string; // admin id
-}
-
-export interface Student {
-  id: string;
-  nom: string;
-  prenom: string;
-  matricule: string;
-  filiere: string;
-  classe: string;
-  telephone: string;
-  email: string;
-  statut: PaymentStatus;
-  montantDu: number;
-  montantPaye: number;
-  etablissement: Etablissement;
-  annee: string;
-}
-
-export interface Payment {
-  id: string;
-  reference: string;
-  etudiantId: string;
-  etudiantNom: string;
-  montant: number;
-  date: string;
-  mode: PaymentMode;
-  statut: PaymentStatus;
-  agentId: string;
-  agentNom: string;
-  filiere: string;
-  classe: string;
-  etablissement: Etablissement;
-  note?: string;
+  createdBy: string;
 }
 
 export interface Expense {
@@ -62,20 +27,20 @@ export interface Expense {
   agentNom: string;
 }
 
-// ─── Etablissements & Filières ───────────────────────────────────────────────
+// ─── Etablissements & Filieres ───────────────────────────────────────────────
 
 export const ETABLISSEMENTS: Record<Etablissement, { label: string; filieres: string[]; color: string }> = {
   analakely: {
     label: "GSI Internationale Analakely",
     color: "#2563eb",
     filieres: [
-      "Tourisme, Voyage & Hôtellerie",
-      "Communication, Multimédia & Journalisme",
+      "Tourisme, Voyage & Hotellerie",
+      "Communication, Multimedia & Journalisme",
       "Informatique, Electronique & Robotique",
-      "Gestion Management des Affaires - Finance & Comptabilité",
+      "Gestion Management des Affaires - Finance & Comptabilite",
       "Gestion Management des Affaires - Marketing Digital",
-      "Paramédicaux - Sage-femme",
-      "Paramédicaux - Infirmier",
+      "Paramedicaux - Sage-femme",
+      "Paramedicaux - Infirmier",
     ],
   },
   antsirabe: {
@@ -85,7 +50,7 @@ export const ETABLISSEMENTS: Record<Etablissement, { label: string; filieres: st
       "Informatique & Conception Web",
       "Gestion & Management RH",
       "Droit & Relations Internationales",
-      "Tourisme, Voyage & Hôtellerie",
+      "Tourisme, Voyage & Hotellerie",
     ],
   },
   tamatave: {
@@ -94,27 +59,27 @@ export const ETABLISSEMENTS: Record<Etablissement, { label: string; filieres: st
     filieres: [
       "Management et Organisation des Affaires",
       "Droit et Relations Internationales",
-      "Tourisme, Voyage et Hôtellerie",
-      "Technologies Informatiques, Electroniques et Télécommunications",
-      "Communication, Multimédia et Journalisme",
+      "Tourisme, Voyage et Hotellerie",
+      "Technologies Informatiques, Electroniques et Telecommunications",
+      "Communication, Multimedia et Journalisme",
     ],
   },
   bypass: {
     label: "GSI Bypass",
     color: "#059669",
     filieres: [
-      "Paramédicaux - Sage-femme",
-      "Paramédicaux - Infirmier",
+      "Paramedicaux - Sage-femme",
+      "Paramedicaux - Infirmier",
       "Aide Soignant",
     ],
   },
 };
 
-export const CLASSES = ["L1", "L2", "L3", "M1", "M2"];
-
-// ─── Users (mock - stored in localStorage in browser) ────────────────────────
+// ─── Admin password ───────────────────────────────────────────────────────────
 
 export const ADMIN_PASSWORD = "Nina GSI";
+
+// ─── Default users (only admin by default) ───────────────────────────────────
 
 export const DEFAULT_USERS: User[] = [
   {
@@ -131,33 +96,12 @@ export const DEFAULT_USERS: User[] = [
   },
 ];
 
-// ─── Mock Students ────────────────────────────────────────────────────────────
-
-export const DEFAULT_STUDENTS: Student[] = [];
-
-export const DEFAULT_PAYMENTS: Payment[] = [];
-
-export const DEFAULT_EXPENSES: Expense[] = [];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+export function generateId(): string {
+  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+}
 
 export function formatMGA(amount: number): string {
   return new Intl.NumberFormat("fr-MG").format(amount) + " Ar";
-}
-
-export function getStatusLabel(status: PaymentStatus): string {
-  return { paye: "Payé", impaye: "Impayé", en_attente: "En attente" }[status];
-}
-
-export function getStatusClass(status: PaymentStatus): string {
-  return { paye: "badge-paid", impaye: "badge-unpaid", en_attente: "badge-pending" }[status];
-}
-
-export function generateId(): string {
-  return Math.random().toString(36).substr(2, 9);
-}
-
-export function generateRef(etablissement: Etablissement, count: number): string {
-  const prefix = etablissement.slice(0, 3).toUpperCase();
-  return `REC-${prefix}-${String(count).padStart(4, "0")}`;
 }

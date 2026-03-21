@@ -548,7 +548,7 @@ export default function EtudiantsPage() {
       {receiptPaiement && (
         <>
           {/* Print area - hidden normally, shown when printing */}
-          <div id="receipt-print-area" style={{display:"none"}}>
+          <div id="receipt-print-area" style={{position:"fixed",top:0,left:0,width:"100%",background:"white",zIndex:999999,padding:"20px",boxSizing:"border-box"}}>
             <div style={{fontFamily:"Arial,sans-serif",maxWidth:"400px",margin:"0 auto",padding:"20px"}}>
               <div style={{background:etabColor,color:"white",padding:"20px",borderRadius:"12px 12px 0 0"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
@@ -643,10 +643,7 @@ export default function EtudiantsPage() {
                 </button>
                 <button
                   onClick={() => {
-                    const el = document.getElementById("receipt-print-area");
-                    if (el) el.style.display = "block";
                     window.print();
-                    setTimeout(() => { if (el) el.style.display = "none"; }, 1000);
                   }}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-colors"
                   style={{background:etabColor}}>

@@ -22,28 +22,32 @@ body {
 
 /* ─── PRINT STYLES ─── */
 @media print {
-  /* Hide all page content */
-  body { background: white !important; }
-  body > * { display: none !important; }
-  
-  /* Show only the receipt */
-  #receipt-print-area {
-    display: block !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    background: white !important;
-    z-index: 999999 !important;
-  }
-
   * {
-    print-color-adjust: exact !important;
     -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   @page {
     size: A5 portrait;
-    margin: 15mm;
+    margin: 10mm;
+  }
+
+  /* Hide everything */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only receipt */
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible !important;
+  }
+
+  #receipt-print-area {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: white !important;
   }
 }

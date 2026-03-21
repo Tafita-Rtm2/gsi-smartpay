@@ -113,7 +113,15 @@ async function apiPatch(collection: string, id: string, body: object): Promise<b
 }
 
 export async function fetchStudents(): Promise<DBStudent[]> {
-  return apiGet<DBStudent>("users");
+  const all = await apiGet<DBStudent>("users");
+  // Deduplicate by id/_id to avoid showing same student multiple times
+  const seen = new Set<string>();
+  return all.filter(s => {
+    const id = s.id || s._id || "";
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 export async function fetchEcolages(): Promise<DBEcolage[]> {
