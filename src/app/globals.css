@@ -40,11 +40,17 @@ body {
 
   /* Only show the print area */
   #receipt-print-area,
-  #receipt-print-area * {
+  #receipt-print-area *,
+  #print-all-students,
+  #print-all-students *,
+  #print-report-area,
+  #print-report-area * {
     visibility: visible !important;
   }
 
-  #receipt-print-area {
+  #receipt-print-area,
+  #print-all-students,
+  #print-report-area {
     position: fixed !important;
     inset: 0 !important;
     background: white !important;

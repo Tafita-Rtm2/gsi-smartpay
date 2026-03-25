@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrendingUp, TrendingDown, Percent, RefreshCw, Printer, FileText, Download, Users, CreditCard } from "lucide-react";
+import { TrendingUp, TrendingDown, Percent, RefreshCw, Printer, FileText, Download, Users, CreditCard, ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS } from "@/lib/data";
 import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, formatMGA } from "@/lib/api";
@@ -16,6 +16,7 @@ export default function RapportsPage() {
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("resultat");
+  const [timeScale, setTimeScale] = useState<"jour" | "mois" | "annee">("mois");
   const printRef = useRef<HTMLDivElement>(null);
 
   // Filters for impression
@@ -49,15 +50,30 @@ export default function RapportsPage() {
   const studentsImpaye  = students.filter(s => { const ec=ecolages.find(e=>e.etudiantId===getStudentId(s)); return !ec||ec.statut==="impaye"; });
   const studentsPending = students.filter(s => { const ec=ecolages.find(e=>e.etudiantId===getStudentId(s)); return ec?.statut==="en_attente"; });
 
-  // Monthly data as simple array (no Recharts to avoid blue bug)
-  const monthlyMap: Record<string, number> = {};
+  // Aggregated data based on timescale
+  const aggregatedMap: Record<string, number> = {};
   paiements.forEach(p => {
-    const m = (p.date||"").slice(0,7);
-    if (m) monthlyMap[m] = (monthlyMap[m]||0) + p.montant;
+    let key = "";
+    if (timeScale === "jour") key = p.date || "";
+    else if (timeScale === "mois") key = (p.date || "").slice(0, 7);
+    else if (timeScale === "annee") key = (p.date || "").slice(0, 4);
+
+    if (key) aggregatedMap[key] = (aggregatedMap[key] || 0) + p.montant;
   });
-  const monthlyData = Object.entries(monthlyMap).sort(([a],[b])=>a.localeCompare(b))
-    .map(([k,v]) => ({ mois: k, label: MOIS_LABELS[parseInt(k.slice(5))-1]+"/"+k.slice(2,4), montant: v }));
-  const maxMontant = Math.max(...monthlyData.map(m=>m.montant), 1);
+
+  const chartData = Object.entries(aggregatedMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-12) // Keep last 12 units
+    .map(([k, v]) => {
+      let label = k;
+      if (timeScale === "mois") {
+        const m = parseInt(k.slice(5)) - 1;
+        label = MOIS_LABELS[m] + " " + k.slice(2, 4);
+      }
+      return { key: k, label, montant: v };
+    });
+
+  const maxMontant = Math.max(...chartData.map(m => m.montant), 1);
 
   // Recouvrement par filiere
   const filieres = etabInfo ? etabInfo.filieres : [];
@@ -81,7 +97,12 @@ export default function RapportsPage() {
   });
 
   const handlePrint = () => {
-    window.print();
+    const el = document.getElementById("print-report-area");
+    if (el) {
+      el.style.display = "block";
+      window.print();
+      setTimeout(() => { el.style.display = "none"; }, 1500);
+    }
   };
 
   const TABS = [
@@ -108,6 +129,31 @@ export default function RapportsPage() {
         <div className="flex gap-2">
           <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm">
             <RefreshCw size={14} />
+          </button>
+          <button
+            onClick={() => {
+              const headers = ["Reference", "Etudiant", "Matricule", "Montant", "Date", "Agent", "Note"];
+              const rows = paiementsFiltres.map(p => [
+                p.reference || "",
+                p.etudiantNom,
+                p.matricule || "",
+                p.montant,
+                p.date,
+                p.agentNom,
+                p.note || ""
+              ]);
+              const csv = [headers, ...rows].map(r => r.join(";")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+              const link = document.createElement("a");
+              link.href = URL.createObjectURL(blob);
+              link.setAttribute("download", `paiements_${new Date().toISOString().slice(0, 10)}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
+          >
+            <Download size={15} /> Exporter CSV
           </button>
           <button onClick={handlePrint}
             className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
@@ -146,18 +192,39 @@ export default function RapportsPage() {
 
           {/* Custom bar chart - NO Recharts (causes blue bug) */}
           <div className="card">
-            <h3 className="text-sm font-semibold text-slate-800 mb-4">Encaissements par mois</h3>
-            {monthlyData.length === 0 ? (
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm font-semibold text-slate-800">Evolution des encaissements</h3>
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                {(["jour", "mois", "annee"] as const).map(scale => (
+                  <button key={scale} onClick={() => setTimeScale(scale)}
+                    className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${timeScale === scale ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+                    style={timeScale === scale ? { color: etabColor } : {}}>
+                    {scale}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {chartData.length === 0 ? (
               <div className="h-40 flex items-center justify-center text-slate-300 text-sm">Aucun paiement</div>
             ) : (
-              <div className="space-y-2">
-                {monthlyData.map(({mois, label, montant}) => (
-                  <div key={mois} className="flex items-center gap-3">
-                    <div className="text-xs text-slate-500 w-14 shrink-0 text-right">{label}</div>
-                    <div className="flex-1 h-7 bg-slate-100 rounded-lg overflow-hidden">
-                      <div className="h-full rounded-lg flex items-center pl-2 transition-all"
-                        style={{width:`${Math.max(5,(montant/maxMontant)*100)}%`, background:etabColor}}>
-                        <span className="text-white text-xs font-bold whitespace-nowrap">{formatMGA(montant)}</span>
+              <div className="space-y-3">
+                {chartData.map(({key, label, montant}) => (
+                  <div key={key} className="group">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1 px-1">
+                      <span>{label}</span>
+                      <span className="text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">{formatMGA(montant)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-8 bg-slate-50 rounded-xl border border-slate-100 overflow-hidden relative">
+                        <div className="h-full rounded-xl flex items-center pl-3 transition-all duration-500 ease-out"
+                          style={{width:`${Math.max(2,(montant/maxMontant)*100)}%`, background:etabColor}}>
+                          {montant / maxMontant > 0.15 && (
+                            <span className="text-white text-[10px] font-bold whitespace-nowrap drop-shadow-sm">{formatMGA(montant)}</span>
+                          )}
+                        </div>
+                        {montant / maxMontant <= 0.15 && (
+                          <span className="absolute left-[calc(15%+8px)] top-1/2 -translate-y-1/2 text-slate-600 text-[10px] font-bold whitespace-nowrap">{formatMGA(montant)}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -438,7 +505,7 @@ export default function RapportsPage() {
       )}
 
       {/* Print area hidden on screen, shown when printing */}
-      <div id="receipt-print-area" style={{display:"none"}}>
+      <div id="print-report-area" style={{display:"none"}}>
         <div style={{fontFamily:"Arial,sans-serif",padding:"20px",background:"white"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",paddingBottom:"12px",borderBottom:`3px solid ${etabColor}`}}>
             <div>

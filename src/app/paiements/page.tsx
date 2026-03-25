@@ -75,6 +75,13 @@ export default function PaiementsPage() {
     setFormError("");
     if (!selectedStudent) { setFormError("Selectionnez un etudiant"); return; }
     if (!form.montant || Number(form.montant) <= 0) { setFormError("Montant invalide"); return; }
+
+    const ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
+    if (!ec) {
+      setFormError("Cet etudiant n'a pas d'ecolage defini. Allez dans la page Etudiants pour en creer un.");
+      return;
+    }
+
     setSaving(true);
     const montant = Number(form.montant);
     const note = `${form.mois} ${form.annee}${form.note ? " — " + form.note : ""}`;
@@ -95,7 +102,6 @@ export default function PaiementsPage() {
     });
 
     // Update ecolage
-    const ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
     if (ec && (ec.id || ec._id)) {
       const newPaye = ec.montantPaye + montant;
       const newStatut: "paye"|"impaye"|"en_attente" =
@@ -114,6 +120,13 @@ export default function PaiementsPage() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     setDeleting(true);
+    // Mark payment as deleted by patching first to make sure it exists
+    const id = deleteConfirm.id || deleteConfirm._id || "";
+    if (id) {
+      const { API_BASE } = await import("@/lib/api");
+      await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" }).catch(() => {});
+    }
+
     // Reverse the ecolage payment
     const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
     if (ec && (ec.id || ec._id)) {
@@ -121,12 +134,6 @@ export default function PaiementsPage() {
       const newStatut: "paye"|"impaye"|"en_attente" =
         newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
       await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
-    }
-    // Mark payment as deleted by patching
-    const id = deleteConfirm.id || deleteConfirm._id || "";
-    if (id) {
-      const { API_BASE } = await import("@/lib/api");
-      await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" }).catch(() => {});
     }
     await load();
     setDeleting(false);

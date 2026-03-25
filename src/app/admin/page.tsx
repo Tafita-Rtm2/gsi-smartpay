@@ -3,11 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Users, Plus, Trash2, Edit3, Eye, EyeOff, CheckCircle2,
   XCircle, Building2, CreditCard, GraduationCap, TrendingUp,
-  ChevronDown, Search, Shield, BarChart3, RefreshCw
+  ChevronDown, Search, Shield, BarChart3, RefreshCw, Trash
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS, Etablissement, User, Role, formatMGA } from "@/lib/data";
-import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, getStudentName } from "@/lib/api";
+import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, getStudentName, API_BASE } from "@/lib/api";
 import clsx from "clsx";
 
 const ETAB_LIST = Object.entries(ETABLISSEMENTS) as [Etablissement, typeof ETABLISSEMENTS[Etablissement]][];
@@ -23,9 +23,12 @@ export default function AdminPage() {
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
   const [loading,   setLoading]   = useState(true);
+  const [timeScale, setTimeScale] = useState<"jour" | "mois" | "annee">("mois");
 
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [searchUser, setSearchUser] = useState("");
+  const [searchStudent, setSearchStudent] = useState("");
+  const [searchPaiement, setSearchPaiement] = useState("");
   const [filterEtab, setFilterEtab] = useState<"tous" | Etablissement>("tous");
 
   const [form, setForm] = useState({
@@ -34,6 +37,7 @@ export default function AdminPage() {
   });
   const [showPwd, setShowPwd] = useState(false);
   const [formError, setFormError] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,6 +47,29 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleResetData = async () => {
+    if (!confirm("ATTENTION : Voulez-vous vraiment supprimer TOUS les paiements et TOUS les écolages ? Cette action est irréversible et remettra tous les compteurs à 0.")) return;
+    setResetting(true);
+    try {
+      // Clear paiements
+      for (const p of paiements) {
+        const id = p.id || p._id;
+        if (id) await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" });
+      }
+      // Clear ecolages
+      for (const e of ecolages) {
+        const id = e.id || e._id;
+        if (id) await fetch(`${API_BASE}/db/ecolage/${id}`, { method: "DELETE" });
+      }
+      alert("Toutes les données financières ont été réinitialisées à 0.");
+      await load();
+    } catch (e) {
+      console.error(e);
+      alert("Une erreur est survenue lors de la réinitialisation.");
+    }
+    setResetting(false);
+  };
 
   const handleCreateUser = () => {
     if (!form.username || !form.password || !form.nom || !form.prenom) {
@@ -91,6 +118,11 @@ export default function AdminPage() {
           <p className="text-white/40 text-sm mt-0.5">Vision globale — donnees reelles</p>
         </div>
         <div className="flex items-center gap-3">
+          <button onClick={handleResetData} disabled={resetting || loading}
+            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-xl text-xs font-medium transition-colors border border-red-500/20">
+            <Trash size={13} className={resetting ? "animate-pulse" : ""} />
+            <span className="hidden sm:inline">Réinitialiser tout à 0</span>
+          </button>
           <button onClick={load} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors border border-white/10">
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           </button>
@@ -114,7 +146,7 @@ export default function AdminPage() {
 
       {/* ── APERCU ── */}
       {tab === "apercu" && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: "Utilisateurs", value: appState.users.filter(u => u.role !== "admin").length, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
@@ -131,6 +163,57 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+
+          {/* Trend Chart */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-white font-bold">Evolution des encaissements globaux</h3>
+              <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+                {(["jour", "mois", "annee"] as const).map(scale => (
+                  <button key={scale} onClick={() => setTimeScale(scale)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${timeScale === scale ? "bg-amber-500 text-slate-900" : "text-white/40 hover:text-white/80"}`}>
+                    {scale}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {(() => {
+              const aggregatedMap: Record<string, number> = {};
+              paiements.forEach(p => {
+                let key = "";
+                if (timeScale === "jour") key = p.date || "";
+                else if (timeScale === "mois") key = (p.date || "").slice(0, 7);
+                else if (timeScale === "annee") key = (p.date || "").slice(0, 4);
+                if (key) aggregatedMap[key] = (aggregatedMap[key] || 0) + p.montant;
+              });
+
+              const chartData = Object.entries(aggregatedMap)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .slice(-10);
+
+              const maxVal = Math.max(...chartData.map(c => c[1]), 1);
+
+              if (chartData.length === 0) return <div className="h-40 flex items-center justify-center text-white/20 text-sm italic">Aucune donnee</div>;
+
+              return (
+                <div className="space-y-4">
+                  {chartData.map(([label, val]) => (
+                    <div key={label} className="group">
+                      <div className="flex justify-between text-[10px] font-bold mb-1 px-1">
+                        <span className="text-white/40">{label}</span>
+                        <span className="text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">{formatMGA(val)}</span>
+                      </div>
+                      <div className="h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                        <div className="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-500"
+                          style={{ width: `${(val / maxVal) * 100}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {stats.map(({ id, info, students: sc, users, totalPaye, totalDu, taux }) => (
               <div key={id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
@@ -273,6 +356,13 @@ export default function AdminPage() {
 
       {/* ── ETUDIANTS ── */}
       {tab === "etudiants" && (
+        <div className="space-y-4">
+          <div className="relative max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+            <input type="text" placeholder="Rechercher un etudiant..." value={searchStudent}
+              onChange={e => setSearchStudent(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+          </div>
         <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
           {loading ? (
             <div className="py-10 text-center text-white/40">Chargement...</div>
@@ -286,7 +376,10 @@ export default function AdminPage() {
                     ))}</tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {students.map(s => {
+                    {students.filter(s => {
+                      const q = searchStudent.toLowerCase();
+                      return getStudentName(s).toLowerCase().includes(q) || (s.matricule||"").toLowerCase().includes(q);
+                    }).map(s => {
                       const ec = ecolages.find(e => e.etudiantId === getStudentId(s));
                       return (
                         <tr key={getStudentId(s)} className="hover:bg-white/5">
@@ -315,7 +408,10 @@ export default function AdminPage() {
                 </table>
               </div>
               <div className="md:hidden divide-y divide-white/5">
-                {students.map(s => {
+                {students.filter(s => {
+                      const q = searchStudent.toLowerCase();
+                      return getStudentName(s).toLowerCase().includes(q) || (s.matricule||"").toLowerCase().includes(q);
+                    }).map(s => {
                   const ec = ecolages.find(e => e.etudiantId === getStudentId(s));
                   return (
                     <div key={getStudentId(s)} className="p-4 space-y-1">
@@ -331,10 +427,18 @@ export default function AdminPage() {
             </>
           )}
         </div>
+        </div>
       )}
 
       {/* ── PAIEMENTS ── */}
       {tab === "paiements" && (
+        <div className="space-y-4">
+          <div className="relative max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+            <input type="text" placeholder="Rechercher un paiement..." value={searchPaiement}
+              onChange={e => setSearchPaiement(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+          </div>
         <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
           {loading ? (
             <div className="py-10 text-center text-white/40">Chargement...</div>
@@ -350,7 +454,10 @@ export default function AdminPage() {
                     ))}</tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {paiements.map((p, i) => (
+                    {paiements.filter(p => {
+                      const q = searchPaiement.toLowerCase();
+                      return p.etudiantNom.toLowerCase().includes(q) || (p.reference||"").toLowerCase().includes(q);
+                    }).map((p, i) => (
                       <tr key={p.id||p._id||i} className="hover:bg-white/5">
                         <td className="px-4 py-3 font-mono text-xs text-amber-400">{p.reference||"—"}</td>
                         <td className="px-4 py-3 text-white font-semibold">{p.etudiantNom}</td>
@@ -365,7 +472,10 @@ export default function AdminPage() {
                 </table>
               </div>
               <div className="md:hidden divide-y divide-white/5">
-                {paiements.map((p, i) => (
+                {paiements.filter(p => {
+                      const q = searchPaiement.toLowerCase();
+                      return p.etudiantNom.toLowerCase().includes(q) || (p.reference||"").toLowerCase().includes(q);
+                    }).map((p, i) => (
                   <div key={p.id||p._id||i} className="p-4 space-y-1">
                     <div className="flex justify-between">
                       <span className="text-white font-semibold text-sm">{p.etudiantNom}</span>
@@ -379,6 +489,7 @@ export default function AdminPage() {
               </div>
             </>
           )}
+        </div>
         </div>
       )}
 

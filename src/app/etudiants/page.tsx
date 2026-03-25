@@ -5,7 +5,7 @@ import {
   Phone, Mail, GraduationCap, CreditCard, Calendar,
   MapPin, Edit3, Trash2, AlertTriangle, Users,
   CheckCircle2, Clock, ChevronDown, Plus, Check,
-  Printer, Receipt, ArrowLeft
+  Printer, Receipt, ArrowLeft, Download
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS } from "@/lib/data";
@@ -48,6 +48,7 @@ export default function EtudiantsPage() {
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
   const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
   const [editStudent,     setEditStudent]     = useState<DBStudent | null>(null);
+  const [addEcolageStudent, setAddEcolageStudent] = useState<DBStudent | null>(null);
   const [deleteEcolage,   setDeleteEcolage]   = useState<DBEcolage | null>(null);
   const [deletePaiement,  setDeletePaiement]  = useState<DBPaiement | null>(null);
 
@@ -56,6 +57,7 @@ export default function EtudiantsPage() {
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
   });
   const [editForm, setEditForm] = useState({ montantDu: "", annee: "2025/2026" });
+  const [addEcolageForm, setAddEcolageForm] = useState({ montantDu: "1500000", annee: "2025/2026" });
 
   const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
   const isAdmin   = currentUser?.role === "admin";
@@ -133,15 +135,38 @@ export default function EtudiantsPage() {
     const id = editEcolage.id || editEcolage._id || "";
     const montantDu = Number(editForm.montantDu);
     const st: "paye"|"impaye"|"en_attente" =
-      editEcolage.montantPaye >= montantDu ? "paye" : editEcolage.montantPaye > 0 ? "en_attente" : "impaye";
+      montantDu > 0 && editEcolage.montantPaye >= montantDu ? "paye" : (editEcolage.montantPaye > 0 ? "en_attente" : "impaye");
     await updateEcolage(id, { montantDu, annee: editForm.annee, statut: st });
     await load(); setSaving(false); setEditEcolage(null); setEditStudent(null);
+  };
+
+  const handleAddEcolage = async () => {
+    if (!addEcolageStudent || !addEcolageForm.montantDu) return;
+    setSaving(true);
+    const { createEcolage } = await import("@/lib/api");
+    await createEcolage({
+      etudiantId: getStudentId(addEcolageStudent),
+      etudiantNom: getStudentName(addEcolageStudent),
+      matricule: addEcolageStudent.matricule,
+      campus: addEcolageStudent.campus || currentUser?.etablissement || "",
+      filiere: addEcolageStudent.filiere || "",
+      classe: addEcolageStudent.niveau || "L1",
+      montantDu: Number(addEcolageForm.montantDu),
+      montantPaye: 0,
+      statut: "impaye",
+      annee: addEcolageForm.annee,
+    });
+    await load(); setSaving(false); setAddEcolageStudent(null);
   };
 
   const handleDeleteEcolage = async () => {
     if (!deleteEcolage) return;
     setDeleting(true);
-    await updateEcolage(deleteEcolage.id || deleteEcolage._id || "", { montantDu: 0, montantPaye: 0, statut: "impaye" as const });
+    // Real deletion instead of just resetting
+    const id = deleteEcolage.id || deleteEcolage._id || "";
+    if (id) {
+      await fetch(`${API_BASE}/db/ecolage/${id}`, { method: "DELETE" }).catch(() => {});
+    }
     await load(); setDeleting(false); setDeleteEcolage(null);
   };
 
@@ -200,6 +225,48 @@ export default function EtudiantsPage() {
         <div className="flex gap-2 self-start sm:self-auto">
           <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+          <button
+            onClick={() => {
+              const headers = ["Matricule", "Nom", "Filiere", "Niveau", "Statut", "Total Du", "Paye", "Reste"];
+              const rows = filtered.map(s => {
+                const ec = getEcolage(s);
+                return [
+                  s.matricule || "",
+                  getStudentName(s),
+                  s.filiere || "",
+                  s.niveau || "",
+                  ec?.statut || "impaye",
+                  ec?.montantDu || 0,
+                  ec?.montantPaye || 0,
+                  (ec?.montantDu || 0) - (ec?.montantPaye || 0)
+                ];
+              });
+              const csv = [headers, ...rows].map(r => r.join(";")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+              const link = document.createElement("a");
+              link.href = URL.createObjectURL(blob);
+              link.setAttribute("download", `etudiants_${new Date().toISOString().slice(0, 10)}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
+          >
+            <Download size={15} /> Exporter CSV
+          </button>
+          <button
+            onClick={() => {
+              const el = document.getElementById("print-all-students");
+              if (el) {
+                el.style.display = "block";
+                window.print();
+                setTimeout(() => { el.style.display = "none"; }, 1500);
+              }
+            }}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
+          >
+            <Printer size={15} /> Imprimer liste
           </button>
           <a href="https://groupegsi.mg/web/admincreat/" target="_blank" rel="noreferrer"
             className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
@@ -324,18 +391,22 @@ export default function EtudiantsPage() {
                               className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-200">
                               <CreditCard size={14} />
                             </button>
-                            {/* Edit ecolage */}
-                            {ec && ec.montantDu > 0 && (
-                              <button onClick={() => { setEditEcolage(ec); setEditStudent(s); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); }} title="Modifier ecolage"
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all border border-transparent hover:border-amber-200">
-                                <Edit3 size={14} />
-                              </button>
-                            )}
-                            {/* Delete ecolage */}
-                            {ec && ec.montantDu > 0 && (
-                              <button onClick={() => setDeleteEcolage(ec)} title="Supprimer ecolage"
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-200">
-                                <Trash2 size={14} />
+                            {/* Edit/Add ecolage */}
+                            {ec ? (
+                              <>
+                                <button onClick={() => { setEditEcolage(ec); setEditStudent(s); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); }} title="Modifier ecolage"
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all border border-transparent hover:border-amber-200">
+                                  <Edit3 size={14} />
+                                </button>
+                                <button onClick={() => setDeleteEcolage(ec)} title="Supprimer ecolage"
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-200">
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <button onClick={() => { setAddEcolageStudent(s); setAddEcolageForm({ montantDu: "1500000", annee: "2025/2026" }); }} title="Ajouter un ecolage"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all border border-transparent hover:border-brand-200">
+                                <Plus size={14} />
                               </button>
                             )}
                           </div>
@@ -383,16 +454,21 @@ export default function EtudiantsPage() {
                         className="flex items-center gap-1 text-xs text-emerald-600 border border-emerald-200 px-2.5 py-1.5 rounded-lg hover:bg-emerald-50">
                         <CreditCard size={12} /> Paiement
                       </button>
-                      {ec && ec.montantDu > 0 && (
-                        <button onClick={() => { setEditEcolage(ec); setEditStudent(s); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); }}
-                          className="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-50">
-                          <Edit3 size={12} /> Modifier
-                        </button>
-                      )}
-                      {ec && ec.montantDu > 0 && (
-                        <button onClick={() => setDeleteEcolage(ec)}
-                          className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50">
-                          <Trash2 size={12} /> Supprimer
+                      {ec ? (
+                        <>
+                          <button onClick={() => { setEditEcolage(ec); setEditStudent(s); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); }}
+                            className="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-50">
+                            <Edit3 size={12} /> Modifier
+                          </button>
+                          <button onClick={() => setDeleteEcolage(ec)}
+                            className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50">
+                            <Trash2 size={12} /> Supprimer
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => { setAddEcolageStudent(s); setAddEcolageForm({ montantDu: "1500000", annee: "2025/2026" }); }}
+                          className="flex items-center gap-1 text-xs text-brand-600 border border-brand-200 px-2.5 py-1.5 rounded-lg hover:bg-brand-50">
+                          <Plus size={12} /> Ajouter ecolage
                         </button>
                       )}
                     </div>
@@ -499,10 +575,10 @@ export default function EtudiantsPage() {
 
                     <div className="flex gap-3">
                       <button onClick={() => setProfileStudent(null)}
-                        className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Fermer</button>
+                        className="flex-2 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 px-4">Fermer</button>
                       <button onClick={() => { openPayment(profileStudent); setProfileStudent(null); }}
-                        className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2" style={{background:etabColor}}>
-                        <Plus size={14} /> Paiement
+                        className="flex-3 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2 px-6" style={{background:etabColor}}>
+                        <Plus size={14} /> Enregistrer un paiement
                       </button>
                     </div>
                   </div>
@@ -810,6 +886,45 @@ export default function EtudiantsPage() {
         </div>
       )}
 
+      {/* ─── ADD ECOLAGE MODAL ─── */}
+      {addEcolageStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Definir l&apos;ecolage</h2>
+              <button onClick={() => setAddEcolageStudent(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
+            </div>
+            <div className="flex items-center gap-3 bg-brand-50 border border-brand-100 rounded-xl p-3">
+              <Avatar s={addEcolageStudent} size={40} />
+              <div><div className="font-bold text-slate-900 text-sm">{getStudentName(addEcolageStudent)}</div><div className="text-xs text-slate-400">{addEcolageStudent.matricule}</div></div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Montant total de l&apos;ecolage (Ar)</label>
+              <input type="number" placeholder="Ex: 1500000" value={addEcolageForm.montantDu} onChange={e=>setAddEcolageForm(f=>({...f,montantDu:e.target.value}))} autoFocus
+                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Annee scolaire</label>
+              <div className="relative">
+                <select value={addEcolageForm.annee} onChange={e=>setAddEcolageForm(f=>({...f,annee:e.target.value}))}
+                  className="appearance-none w-full px-3 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
+                  {["2024/2025","2025/2026","2026/2027"].map(y=><option key={y}>{y}</option>)}
+                </select>
+                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setAddEcolageStudent(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
+              <button onClick={handleAddEcolage} disabled={saving||!addEcolageForm.montantDu}
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2" style={{background:etabColor}}>
+                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : "Confirmer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {/* ─── DELETE PAIEMENT CONFIRM ─── */}
       {deletePaiement && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -834,6 +949,80 @@ export default function EtudiantsPage() {
           </div>
         </div>
       )}
+
+      {/* ─── PRINT ALL AREA ─── */}
+      <div id="print-all-students" style={{display:"none"}}>
+        <div style={{fontFamily:"Arial,sans-serif",padding:"30px",background:"white"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px",paddingBottom:"15px",borderBottom:`3px solid ${etabColor}`}}>
+            <div>
+              <div style={{fontSize:"24px",fontWeight:"bold",color:etabColor}}>GSI SmartPay — Liste des Etudiants</div>
+              <div style={{fontSize:"14px",color:"#64748b",marginTop:"4px"}}>{etabInfo?.label}</div>
+            </div>
+            <div style={{textAlign:"right",fontSize:"12px",color:"#64748b"}}>
+              <div>Filiere: {filiereFilter}</div>
+              <div>Statut: {statutTab}</div>
+              <div>Date: {new Date().toLocaleDateString("fr-FR")}</div>
+            </div>
+          </div>
+
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:"11px"}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["Matricule","Nom complet","Filiere","Niveau","Total Du","Total Paye","Reste","Statut"].map(h=>(
+                  <th key={h} style={{border:"1px solid #e2e8f0",padding:"10px 8px",textAlign:"left",color:"#475569",fontWeight:"bold",textTransform:"uppercase"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((s,i)=>{
+                const ec = getEcolage(s);
+                const name = getStudentName(s);
+                const reste = (ec?.montantDu||0) - (ec?.montantPaye||0);
+                return (
+                  <tr key={i} style={{background:i%2===0?"white":"#fbfcfd"}}>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",fontFamily:"monospace",color:"#64748b"}}>{s.matricule||"—"}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",fontWeight:"600",color:"#1e293b"}}>{name}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",color:"#475569",maxWidth:"150px"}}>{s.filiere||"—"}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",textAlign:"center"}}>{s.niveau||"—"}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",fontWeight:"500"}}>{formatMGA(ec?.montantDu||0)}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",color:"#059669",fontWeight:"500"}}>{formatMGA(ec?.montantPaye||0)}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px",color:reste>0?"#dc2626":"#059669",fontWeight:"bold"}}>{formatMGA(reste)}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"8px"}}>
+                      <span style={{
+                        padding:"3px 8px",borderRadius:"6px",fontWeight:"bold",fontSize:"9px",textTransform:"uppercase",
+                        background:ec?.statut==="paye"?"#dcfce7":ec?.statut==="en_attente"?"#fef3c7":"#fee2e2",
+                        color:ec?.statut==="paye"?"#15803d":ec?.statut==="en_attente"?"#92400e":"#991b1b",
+                        border:`1px solid ${ec?.statut==="paye"?"#bbf7d0":ec?.statut==="en_attente"?"#fde68a":"#fecaca"}`
+                      }}>
+                        {STATUT_LABELS[ec?.statut||"impaye"]}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div style={{marginTop:"30px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"15px"}}>
+            <div style={{border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
+              <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>ETUDIANTS</div>
+              <div style={{fontSize:"20px",fontWeight:"bold",color:"#1e293b"}}>{filtered.length}</div>
+            </div>
+            <div style={{border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
+              <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>TOTAL PAYE</div>
+              <div style={{fontSize:"20px",fontWeight:"bold",color:"#059669"}}>{formatMGA(filtered.reduce((sum,s)=>sum+(getEcolage(s)?.montantPaye||0),0))}</div>
+            </div>
+            <div style={{border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
+              <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>RESTE A PERCEVOIR</div>
+              <div style={{fontSize:"20px",fontWeight:"bold",color:"#dc2626"}}>{formatMGA(filtered.reduce((sum,s)=>sum+Math.max(0,(getEcolage(s)?.montantDu||0)-(getEcolage(s)?.montantPaye||0)),0))}</div>
+            </div>
+          </div>
+
+          <div style={{textAlign:"center",marginTop:"40px",color:"#94a3b8",fontSize:"10px",borderTop:"1px solid #f1f5f9",paddingTop:"15px"}}>
+            Document genere par GSI SmartPay — Logiciel de gestion d&apos;ecolage universitaire
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
