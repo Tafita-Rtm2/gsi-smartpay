@@ -11,7 +11,7 @@ import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS, Etablissement } from "@/lib/data";
 import {
   fetchStudents, fetchEcolages, fetchPaiements, createPaiement,
-  updateEcolage, DBStudent, DBEcolage, DBPaiement,
+  updateEcolage, updatePaiement, DBStudent, DBEcolage, DBPaiement,
   getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE
 } from "@/lib/api";
 import clsx from "clsx";
@@ -46,8 +46,7 @@ export default function EtudiantsPage() {
   const [receiptPaiement, setReceiptPaiement] = useState<DBPaiement | null>(null);
   const [payStudent,      setPayStudent]      = useState<DBStudent | null>(null);
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
-  const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
-  const [editStudent,     setEditStudent]     = useState<DBStudent | null>(null);
+  const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
   const [addEcolageStudent, setAddEcolageStudent] = useState<DBStudent | null>(null);
   const [showConfig,      setShowConfig]      = useState(false);
   const [deleteEcolage,   setDeleteEcolage]   = useState<DBEcolage | null>(null);
@@ -57,7 +56,6 @@ export default function EtudiantsPage() {
     mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()),
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
   });
-  const [editForm, setEditForm] = useState({ montantDu: "", annee: "2025/2026" });
   const [addEcolageForm, setAddEcolageForm] = useState({ montantDu: "1500000", annee: "2025/2026" });
 
   const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
@@ -110,36 +108,63 @@ export default function EtudiantsPage() {
     setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
   };
 
+  const openEditPayment = (p: DBPaiement) => {
+    setEditingPaiement(p);
+    const st = students.find(s => getStudentId(s) === p.etudiantId);
+    if (st) {
+      setPayStudent(st);
+      setPayEcolage(getEcolage(st) || null);
+    }
+    let m = MOIS[new Date().getMonth()];
+    let y = String(new Date().getFullYear());
+    let noteTxt = p.note || "";
+    for (const mois of MOIS) {
+      if (noteTxt.startsWith(mois)) {
+        m = mois;
+        const rest = noteTxt.slice(mois.length).trim();
+        const yearMatch = rest.match(/^(\d{4})/);
+        if (yearMatch) {
+          y = yearMatch[1];
+          noteTxt = rest.slice(4).replace(/^(\s*—\s*)/, "").trim();
+        }
+        break;
+      }
+    }
+    setPayForm({ mois: m, annee: y, montant: String(p.montant), date: p.date, note: noteTxt });
+  };
+
   const handleSavePayment = async () => {
     if (!payStudent || !payForm.montant) return;
     setSaving(true);
     const montant = Number(payForm.montant);
     const note = `${payForm.mois} ${payForm.annee}${payForm.note ? " — "+payForm.note : ""}`;
-    await createPaiement({
-      etudiantId: getStudentId(payStudent), etudiantNom: getStudentName(payStudent),
-      matricule: payStudent.matricule, campus: payStudent.campus || currentUser?.etablissement || "",
-      filiere: payStudent.filiere || "", classe: payStudent.niveau || "L1",
-      montant, date: payForm.date, mode: "Especes",
-      agentId: currentUser?.id || "", agentNom: `${currentUser?.prenom||""} ${currentUser?.nom||""}`.trim(), note,
-    });
-    if (payEcolage && (payEcolage.id || payEcolage._id)) {
-      const newPaye = payEcolage.montantPaye + montant;
-      const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
-      await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+
+    if (editingPaiement) {
+      const pid = editingPaiement.id || editingPaiement._id || "";
+      await updatePaiement(pid, { montant, date: payForm.date, note });
+      if (payEcolage && (payEcolage.id || payEcolage._id)) {
+        const diff = montant - editingPaiement.montant;
+        const newPaye = payEcolage.montantPaye + diff;
+        const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+        await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+      }
+    } else {
+      await createPaiement({
+        etudiantId: getStudentId(payStudent), etudiantNom: getStudentName(payStudent),
+        matricule: payStudent.matricule, campus: payStudent.campus || currentUser?.etablissement || "",
+        filiere: payStudent.filiere || "", classe: payStudent.niveau || "L1",
+        montant, date: payForm.date, mode: "Especes",
+        agentId: currentUser?.id || "", agentNom: `${currentUser?.prenom||""} ${currentUser?.nom||""}`.trim(), note,
+      });
+      if (payEcolage && (payEcolage.id || payEcolage._id)) {
+        const newPaye = payEcolage.montantPaye + montant;
+        const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+        await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+      }
     }
-    await load(); setSaving(false); setPayStudent(null); setPayEcolage(null);
+    await load(); setSaving(false); setPayStudent(null); setPayEcolage(null); setEditingPaiement(null);
   };
 
-  const handleEditEcolage = async () => {
-    if (!editEcolage || !editForm.montantDu) return;
-    setSaving(true);
-    const id = editEcolage.id || editEcolage._id || "";
-    const montantDu = Number(editForm.montantDu);
-    const st: "paye"|"impaye"|"en_attente" =
-      montantDu > 0 && editEcolage.montantPaye >= montantDu ? "paye" : (editEcolage.montantPaye > 0 ? "en_attente" : "impaye");
-    await updateEcolage(id, { montantDu, annee: editForm.annee, statut: st });
-    await load(); setSaving(false); setEditEcolage(null); setEditStudent(null);
-  };
 
   const handleAddEcolage = async () => {
     if (!addEcolageStudent || !addEcolageForm.montantDu) return;
@@ -163,27 +188,35 @@ export default function EtudiantsPage() {
   const handleApplyConfig = async () => {
     if (!currentUser) return;
     setSaving(true);
-    const { createEcolage } = await import("@/lib/api");
+    const { createEcolage, updateEcolage } = await import("@/lib/api");
 
-    // For each student in this campus without ecolage
+    // For each student in this campus
     const myEtab = currentUser.etablissement;
-    const studentsWithoutEcolage = filtered.filter(s => !getEcolage(s));
 
-    for (const s of studentsWithoutEcolage) {
+    for (const s of filtered) {
       const config = appState.programFees.find(p => p.campus === myEtab && p.filiere === s.filiere);
       if (config && config.amount > 0) {
-        await createEcolage({
-          etudiantId: getStudentId(s),
-          etudiantNom: getStudentName(s),
-          matricule: s.matricule,
-          campus: s.campus || myEtab,
-          filiere: s.filiere || "",
-          classe: s.niveau || "L1",
-          montantDu: config.amount,
-          montantPaye: 0,
-          statut: "impaye",
-          annee: "2025/2026",
-        });
+        const ec = getEcolage(s);
+        if (ec) {
+          // Update existing
+          const st: "paye"|"impaye"|"en_attente" =
+            ec.montantPaye >= config.amount ? "paye" : ec.montantPaye > 0 ? "en_attente" : "impaye";
+          await updateEcolage(ec.id || ec._id || "", { montantDu: config.amount, statut: st });
+        } else {
+          // Create new
+          await createEcolage({
+            etudiantId: getStudentId(s),
+            etudiantNom: getStudentName(s),
+            matricule: s.matricule,
+            campus: s.campus || myEtab,
+            filiere: s.filiere || "",
+            classe: s.niveau || "L1",
+            montantDu: config.amount,
+            montantPaye: 0,
+            statut: "impaye",
+            annee: "2025/2026",
+          });
+        }
       }
     }
     await load();
@@ -194,11 +227,29 @@ export default function EtudiantsPage() {
   const handleDeleteEcolage = async () => {
     if (!deleteEcolage) return;
     setDeleting(true);
-    // Real deletion instead of just resetting
+
+    // Delete associated payments to reset to 0 properly?
+    // User said "quand on suprime l'ecolage l'eleve est dans le place de impayer"
+    // Deleting the ecolage record means we lose track of the debt.
+    // If we want them to be "impayé", we should probably just reset the paid amount to 0
+    // OR delete the payments.
+
+    // Let's delete the ecolage record as requested by "supprimer"
     const id = deleteEcolage.id || deleteEcolage._id || "";
     if (id) {
       await fetch(`${API_BASE}/db/ecolage/${id}`, { method: "DELETE" }).catch(() => {});
+
+      // Also delete all payments for this student to make them "impayé" (0 paid)
+      const stId = deleteEcolage.etudiantId;
+      const studentPayments = (await (await fetch(`${API_BASE}/db/paiements`)).json()).documents || [];
+      const toDelete = studentPayments.filter((p: any) => p.etudiantId === stId);
+
+      for (const p of toDelete) {
+        const pid = p.id || p._id;
+        await fetch(`${API_BASE}/db/paiements/${pid}`, { method: "DELETE" }).catch(() => {});
+      }
     }
+
     await load(); setDeleting(false); setDeleteEcolage(null);
   };
 
@@ -430,11 +481,11 @@ export default function EtudiantsPage() {
                             {/* Edit/Add ecolage */}
                             {ec ? (
                               <>
-                                <button onClick={() => { setEditEcolage(ec); setEditStudent(s); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); }} title="Modifier ecolage"
+                                <button onClick={() => openPayment(s)} title="Modifier / Payer"
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all border border-transparent hover:border-amber-200">
                                   <Edit3 size={14} />
                                 </button>
-                                <button onClick={() => setDeleteEcolage(ec)} title="Supprimer ecolage"
+                                <button onClick={() => setDeleteEcolage(ec)} title="Supprimer l'écolage"
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-200">
                                   <Trash2 size={14} />
                                 </button>
@@ -492,7 +543,7 @@ export default function EtudiantsPage() {
                       </button>
                       {ec ? (
                         <>
-                          <button onClick={() => { setEditEcolage(ec); setEditStudent(s); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); }}
+                          <button onClick={() => openPayment(s)}
                             className="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-50">
                             <Edit3 size={12} /> Modifier
                           </button>
@@ -587,7 +638,7 @@ export default function EtudiantsPage() {
                         <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Ecolage</span>
                         <div className="flex gap-2">
                           {ec && ec.montantDu > 0 && (
-                            <button onClick={() => { setEditEcolage(ec); setEditStudent(profileStudent); setEditForm({ montantDu: String(ec.montantDu), annee: ec.annee||"2025/2026" }); setProfileStudent(null); }}
+                            <button onClick={() => { openPayment(profileStudent); setProfileStudent(null); }}
                               className="text-xs text-amber-600 flex items-center gap-0.5 hover:underline"><Edit3 size={11} /> Modifier</button>
                           )}
                           {ec && ec.montantDu > 0 && (
@@ -640,6 +691,10 @@ export default function EtudiantsPage() {
                           <div className="text-xs text-slate-400">{p.agentNom}</div>
                         </div>
                         <div className="flex items-center gap-1">
+                          <button onClick={e => { e.stopPropagation(); openEditPayment(p); setProfileStudent(null); }}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-amber-500 hover:bg-amber-100 transition-all" title="Modifier">
+                            <Edit3 size={13} />
+                          </button>
                           <button onClick={e => { e.stopPropagation(); setReceiptPaiement(p); }}
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-brand-600 hover:bg-brand-100 transition-all" title="Voir recu">
                             <Printer size={13} />
@@ -784,8 +839,8 @@ export default function EtudiantsPage() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <div><h2 className="text-lg font-bold text-slate-900">Enregistrer un paiement</h2><p className="text-xs text-slate-400">Paiement mensuel</p></div>
-              <button onClick={() => { setPayStudent(null); setPayEcolage(null); }} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
+              <div><h2 className="text-lg font-bold text-slate-900">{editingPaiement ? "Modifier le paiement" : "Enregistrer un paiement"}</h2><p className="text-xs text-slate-400">{editingPaiement ? "Mise a jour de transaction" : "Paiement mensuel"}</p></div>
+              <button onClick={() => { setPayStudent(null); setPayEcolage(null); setEditingPaiement(null); }} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
             </div>
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
               <Avatar s={payStudent} size={44} />
@@ -844,59 +899,16 @@ export default function EtudiantsPage() {
               Agent: <span className="font-bold">{currentUser?.prenom} {currentUser?.nom}</span>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setPayStudent(null); setPayEcolage(null); }} className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
+              <button onClick={() => { setPayStudent(null); setPayEcolage(null); setEditingPaiement(null); }} className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
               <button onClick={handleSavePayment} disabled={saving||!payForm.montant}
                 className="flex-1 py-3 rounded-xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2" style={{background:etabColor}}>
-                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : <><CreditCard size={15} />Enregistrer</>}
+                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : <><CreditCard size={15} />{editingPaiement ? "Modifier" : "Enregistrer"}</>}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── EDIT ECOLAGE MODAL ─── */}
-      {editEcolage && editStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Modifier l&apos;ecolage</h2>
-              <button onClick={() => { setEditEcolage(null); setEditStudent(null); }} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
-            </div>
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-xl p-3">
-              <Avatar s={editStudent} size={40} />
-              <div><div className="font-bold text-slate-900 text-sm">{getStudentName(editStudent)}</div><div className="text-xs text-slate-400">{editStudent.matricule}</div></div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Nouveau montant total (Ar)</label>
-              <input type="number" placeholder="Ex: 1200000" value={editForm.montantDu} onChange={e=>setEditForm(f=>({...f,montantDu:e.target.value}))} autoFocus
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Annee scolaire</label>
-              <div className="relative">
-                <select value={editForm.annee} onChange={e=>setEditForm(f=>({...f,annee:e.target.value}))}
-                  className="appearance-none w-full px-3 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                  {["2024/2025","2025/2026","2026/2027"].map(y=><option key={y}>{y}</option>)}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-            <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs text-slate-500">
-              Deja paye: <span className="font-bold text-emerald-600">{formatMGA(editEcolage.montantPaye)}</span>
-              {editForm.montantDu && Number(editForm.montantDu) > editEcolage.montantPaye && (
-                <span className="ml-2">Reste: <span className="font-bold text-red-500">{formatMGA(Number(editForm.montantDu)-editEcolage.montantPaye)}</span></span>
-              )}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => { setEditEcolage(null); setEditStudent(null); }} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
-              <button onClick={handleEditEcolage} disabled={saving||!editForm.montantDu}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2" style={{background:etabColor}}>
-                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : <><Edit3 size={14} />Modifier</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── DELETE ECOLAGE CONFIRM ─── */}
       {deleteEcolage && (
@@ -905,7 +917,7 @@ export default function EtudiantsPage() {
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 mx-auto"><AlertTriangle size={26} className="text-red-600" /></div>
             <div className="text-center space-y-1">
               <h2 className="text-lg font-bold text-slate-900">Supprimer cet ecolage ?</h2>
-              <p className="text-sm text-slate-500">Les montants seront reinitialises. Les paiements deja enregistres restent conserves.</p>
+              <p className="text-sm text-slate-500">L&apos;ecolage et TOUS les paiements associes de cet etudiant seront supprimes.</p>
             </div>
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center space-y-0.5">
               <div className="font-bold text-slate-900">{deleteEcolage.etudiantNom}</div>

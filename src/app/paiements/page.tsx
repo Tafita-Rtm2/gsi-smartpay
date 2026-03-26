@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle } from "lucide-react";
+import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Edit3 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
+import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 
 const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
@@ -15,6 +15,7 @@ export default function PaiementsPage() {
   const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
   const [saving,    setSaving]    = useState(false);
   const [formError, setFormError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<DBPaiement | null>(null);
@@ -117,6 +118,66 @@ export default function PaiementsPage() {
     setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
   };
 
+  const handleEdit = async () => {
+    if (!editingPaiement || !form.montant || Number(form.montant) <= 0) {
+      setFormError("Montant invalide"); return;
+    }
+    setSaving(true);
+    const id = editingPaiement.id || editingPaiement._id || "";
+    const newMontant = Number(form.montant);
+    const note = `${form.mois} ${form.annee}${form.note ? " — " + form.note : ""}`;
+
+    // Update payment record
+    await updatePaiement(id, {
+      montant: newMontant,
+      date: form.date,
+      note,
+    });
+
+    // Update student's total paid in ecolage record
+    const ec = ecolages.find(e => e.etudiantId === editingPaiement.etudiantId);
+    if (ec && (ec.id || ec._id)) {
+      const difference = newMontant - editingPaiement.montant;
+      const newTotalPaye = ec.montantPaye + difference;
+      const newStatut: "paye"|"impaye"|"en_attente" =
+        newTotalPaye >= ec.montantDu ? "paye" : newTotalPaye > 0 ? "en_attente" : "impaye";
+      await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotalPaye, statut: newStatut });
+    }
+
+    await load();
+    setSaving(false);
+    setEditingPaiement(null);
+    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
+  };
+
+  const openEdit = (p: DBPaiement) => {
+    setEditingPaiement(p);
+    let m = MOIS[new Date().getMonth()];
+    let y = String(new Date().getFullYear());
+    let noteTxt = p.note || "";
+
+    for (const mois of MOIS) {
+      if (noteTxt.startsWith(mois)) {
+        m = mois;
+        const rest = noteTxt.slice(mois.length).trim();
+        const yearMatch = rest.match(/^(\d{4})/);
+        if (yearMatch) {
+          y = yearMatch[1];
+          noteTxt = rest.slice(4).replace(/^(\s*—\s*)/, "").trim();
+        }
+        break;
+      }
+    }
+
+    setForm({
+      mois: m,
+      annee: y,
+      montant: String(p.montant),
+      date: p.date,
+      note: noteTxt,
+    });
+  };
+
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     setDeleting(true);
@@ -202,10 +263,16 @@ export default function PaiementsPage() {
                       <td className="px-4 py-3 text-slate-400 text-xs">{p.note || "—"}</td>
                       <td className="px-4 py-3 text-slate-500 text-xs">{p.agentNom}</td>
                       <td className="px-4 py-3">
-                        <button onClick={() => setDeleteConfirm(p)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEdit(p)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-amber-500 hover:bg-amber-50 transition-all">
+                            <Edit3 size={13} />
+                          </button>
+                          <button onClick={() => setDeleteConfirm(p)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -228,6 +295,10 @@ export default function PaiementsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-emerald-700">{formatMGA(p.montant)}</span>
+                      <button onClick={() => openEdit(p)}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-amber-500 hover:bg-amber-50 transition-all">
+                        <Edit3 size={13} />
+                      </button>
                       <button onClick={() => setDeleteConfirm(p)}
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
                         <Trash2 size={13} />
@@ -246,16 +317,16 @@ export default function PaiementsPage() {
         )}
       </div>
 
-      {/* ─── PAYMENT MODAL ─── */}
-      {showModal && (
+      {/* ─── PAYMENT MODAL (ADD/EDIT) ─── */}
+      {(showModal || editingPaiement) && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Enregistrer un paiement</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Paiement mensuel de l&apos;ecolage</p>
+                <h2 className="text-lg font-bold text-slate-900">{editingPaiement ? "Modifier le paiement" : "Enregistrer un paiement"}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">{editingPaiement ? "Modifier les details de cette transaction" : "Paiement mensuel de l'ecolage"}</p>
               </div>
-              <button onClick={() => { setShowModal(false); setSelectedStudent(null); setFormError(""); }}
+              <button onClick={() => { setShowModal(false); setEditingPaiement(null); setSelectedStudent(null); setFormError(""); }}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100">
                 <X size={16} />
               </button>
@@ -264,7 +335,18 @@ export default function PaiementsPage() {
             {/* Student selector */}
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-2">Etudiant</label>
-              {selectedStudent ? (
+              {editingPaiement ? (
+                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl opacity-70">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{ background: etabColor }}>
+                    {editingPaiement.etudiantNom.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 text-sm">{editingPaiement.etudiantNom}</div>
+                    <div className="text-xs text-slate-500">{editingPaiement.matricule} · {editingPaiement.filiere}</div>
+                  </div>
+                </div>
+              ) : selectedStudent ? (
                 <div className="flex items-center gap-3 p-3 bg-brand-50 border-2 border-brand-200 rounded-xl">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                     style={{ background: etabColor }}>
@@ -359,12 +441,12 @@ export default function PaiementsPage() {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => { setShowModal(false); setSelectedStudent(null); setFormError(""); }}
+              <button onClick={() => { setShowModal(false); setEditingPaiement(null); setSelectedStudent(null); setFormError(""); }}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
-              <button onClick={handleAdd} disabled={saving}
+              <button onClick={editingPaiement ? handleEdit : handleAdd} disabled={saving}
                 className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                 style={{ background: etabColor }}>
-                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Enregistrement...</> : "Enregistrer"}
+                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Traitement...</> : (editingPaiement ? "Modifier" : "Enregistrer")}
               </button>
             </div>
           </div>

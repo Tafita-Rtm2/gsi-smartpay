@@ -136,6 +136,10 @@ export async function updateEcolage(id: string, data: Partial<DBEcolage>): Promi
   return apiPatch("ecolage", id, { ...data, updatedAt: new Date().toISOString() });
 }
 
+export async function updatePaiement(id: string, data: Partial<DBPaiement>): Promise<boolean> {
+  return apiPatch("paiements", id, { ...data, updatedAt: new Date().toISOString() });
+}
+
 export async function fetchPaiements(): Promise<DBPaiement[]> {
   return apiGet<DBPaiement>("paiements");
 }
