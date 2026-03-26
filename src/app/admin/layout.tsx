@@ -3,18 +3,18 @@ import Link from "next/link";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950">
-      <header className="bg-slate-900 border-b border-white/10 px-4 sm:px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-amber-500/20 rounded-xl flex items-center justify-center">
-            <Shield size={18} className="text-amber-400" />
+          <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+            <Shield size={20} className="text-white" />
           </div>
           <div>
-            <div className="text-white font-bold text-sm">Panneau Administrateur</div>
-            <div className="text-white/40 text-xs">GSI SmartPay</div>
+            <div className="text-slate-900 font-bold text-sm">Panneau Administrateur</div>
+            <div className="text-slate-400 text-xs">GSI SmartPay</div>
           </div>
         </div>
-        <Link href="/" className="text-xs text-white/40 hover:text-white/70 border border-white/10 px-3 py-1.5 rounded-lg transition-colors">
+        <Link href="/" className="text-xs text-slate-500 hover:text-slate-900 border border-slate-200 px-4 py-2 rounded-xl font-bold transition-all hover:bg-slate-50">
           Retour login
         </Link>
       </header>

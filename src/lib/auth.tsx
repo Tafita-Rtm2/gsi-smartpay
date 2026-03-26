@@ -5,11 +5,18 @@ import {
   Expense,
 } from "@/lib/data";
 
-// Auth only handles users and local expenses
+// Auth only handles users, local expenses and program configurations
 // Students, payments, ecolages come directly from the real API
+interface ProgramFee {
+  campus: Etablissement;
+  filiere: string;
+  amount: number;
+}
+
 interface AppState {
   users: User[];
   expenses: Expense[]; // local expenses only
+  programFees: ProgramFee[];
 }
 
 interface AuthContextType {
@@ -24,7 +31,11 @@ interface AuthContextType {
   deleteUser: (id: string) => void;
   // Local expenses only
   addExpense: (e: Omit<Expense, "id">) => void;
+  updateExpense: (id: string, data: Partial<Expense>) => void;
+  deleteExpense: (id: string) => void;
   myExpenses: Expense[];
+  // Program Fees management
+  setProgramFee: (campus: Etablissement, filiere: string, amount: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -36,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [appState, setAppState] = useState<AppState>({
     users: DEFAULT_USERS,
     expenses: [],
+    programFees: [],
   });
 
   useEffect(() => {
@@ -46,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAppState({
           users: parsed.users || DEFAULT_USERS,
           expenses: parsed.expenses || [],
+          programFees: parsed.programFees || [],
         });
         // Restore session
         const session = localStorage.getItem(SESSION_KEY);
@@ -105,6 +118,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persist({ ...appState, expenses: [...appState.expenses, newE] });
   };
 
+  const updateExpense = (id: string, data: Partial<Expense>) => {
+    persist({ ...appState, expenses: appState.expenses.map(e => e.id === id ? { ...e, ...data } : e) });
+  };
+
+  const deleteExpense = (id: string) => {
+    persist({ ...appState, expenses: appState.expenses.filter(e => e.id !== id) });
+  };
+
+  const setProgramFee = (campus: Etablissement, filiere: string, amount: number) => {
+    const existing = appState.programFees.find(p => p.campus === campus && p.filiere === filiere);
+    let newList;
+    if (existing) {
+      newList = appState.programFees.map(p => (p.campus === campus && p.filiere === filiere) ? { ...p, amount } : p);
+    } else {
+      newList = [...appState.programFees, { campus, filiere, amount }];
+    }
+    persist({ ...appState, programFees: newList });
+  };
+
   const isAdmin = currentUser?.role === "admin";
   const myExpenses = isAdmin
     ? appState.expenses
@@ -114,7 +146,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       currentUser, isAdmin, appState, login, logout,
       createUser, updateUser, deleteUser,
-      addExpense, myExpenses,
+      addExpense, updateExpense, deleteExpense, myExpenses,
+      setProgramFee,
     }}>
       {children}
     </AuthContext.Provider>

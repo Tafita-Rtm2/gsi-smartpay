@@ -50,77 +50,75 @@ export default function LoginPage() {
   const etabInfo = ETABLISSEMENTS[etab];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden"
-      style={{ background: `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, ${etabInfo.color}22 100%)` }}>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 relative overflow-hidden">
 
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/4" style={{ background: etabInfo.color }} />
-        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-3xl opacity-10 translate-y-1/2 -translate-x-1/4" style={{ background: etabInfo.color }} />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4" style={{ background: etabInfo.color }} />
+        <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" style={{ background: etabInfo.color }} />
       </div>
 
       {/* Admin button - top right */}
       <button onClick={() => setShowAdminModal(true)}
-        className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all">
-        <Shield size={14} />
+        className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 shadow-sm px-4 py-2.5 rounded-xl text-xs font-bold transition-all">
+        <Shield size={14} className="text-amber-500" />
         <span className="hidden sm:inline">Panneau Admin</span>
       </button>
 
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20 shadow-2xl"
-            style={{ background: etabInfo.color + "44" }}>
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-brand-600/20"
+            style={{ background: etabInfo.color }}>
             <GraduationCap size={32} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">GSI SmartPay</h1>
-          <p className="text-white/40 text-sm mt-1">Gestion des ecolages</p>
+          <h1 className="text-3xl font-bold text-slate-900">GSI SmartPay</h1>
+          <p className="text-slate-500 text-sm mt-1">Gestion des écolages universitaire</p>
         </div>
 
         {/* Etablissement tabs */}
-        <div className="grid grid-cols-4 gap-1 bg-white/5 border border-white/10 rounded-2xl p-1 mb-5">
+        <div className="grid grid-cols-4 gap-1 bg-slate-200/50 border border-slate-200 rounded-2xl p-1 mb-6">
           {ETABS.map(({ id, short }) => (
             <button key={id} onClick={() => { setEtab(id); setError(""); }}
               className={clsx("py-2.5 rounded-xl text-xs font-bold transition-all",
-                etab === id ? "text-white shadow-lg" : "text-white/40 hover:text-white/60")}
-              style={etab === id ? { background: ETABLISSEMENTS[id].color } : {}}>
+                etab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
               {short}
             </button>
           ))}
         </div>
 
-        <p className="text-center text-white/50 text-xs mb-4 font-medium">{etabInfo.label}</p>
+        <p className="text-center text-slate-400 text-xs mb-4 font-bold uppercase tracking-wider">{etabInfo.label}</p>
 
         {/* Login card */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-7 shadow-2xl">
-          <h2 className="text-white font-bold text-lg mb-5">Connexion</h2>
-          <form onSubmit={handleLogin} className="space-y-4">
+        <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-2xl shadow-slate-200/50">
+          <h2 className="text-slate-900 font-bold text-xl mb-6">Connexion</h2>
+          <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="text-xs font-semibold text-white/50 block mb-1.5">Identifiant</label>
+              <label className="text-xs font-bold text-slate-500 block mb-2 uppercase tracking-wide">Identifiant</label>
               <div className="relative">
-                <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type="text" placeholder="Votre identifiant" value={username}
                   onChange={e => setUsername(e.target.value)} required
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 transition-all" />
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-white/50 block mb-1.5">Mot de passe</label>
+              <label className="text-xs font-bold text-slate-500 block mb-2 uppercase tracking-wide">Mot de passe</label>
               <div className="relative">
-                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input type={showPwd ? "text" : "password"} placeholder="Votre mot de passe" value={password}
                   onChange={e => setPassword(e.target.value)} required
-                  className="w-full pl-10 pr-10 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 transition-all" />
+                  className="w-full pl-11 pr-11 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
                 <button type="button" onClick={() => setShowPwd(s => !s)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
             {error && (
-              <div className="bg-red-500/20 border border-red-400/30 rounded-xl px-4 py-2.5 text-red-300 text-xs">{error}</div>
+              <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-red-600 text-xs font-medium">{error}</div>
             )}
             <button type="submit" disabled={loading}
-              className="w-full py-3 rounded-xl text-white font-bold text-sm transition-all shadow-lg disabled:opacity-60 mt-1"
+              className="w-full py-4 rounded-xl text-white font-bold text-sm transition-all shadow-lg shadow-brand-600/20 disabled:opacity-60 mt-2"
               style={{ background: etabInfo.color }}>
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -131,6 +129,9 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+        <p className="text-center text-slate-400 text-xs mt-8">
+          © 2025 Groupe GSI · Système de gestion sécurisé
+        </p>
       </div>
 
       {/* Admin Modal */}

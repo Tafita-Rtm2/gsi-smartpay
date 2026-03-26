@@ -1,19 +1,22 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw } from "lucide-react";
+import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw, Edit3, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fetchPaiements, fetchEcolages, createEcolage, DBPaiement, DBEcolage, getStudentId, formatMGA } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 
 const CATEGORIES = ["Toutes", "Charges", "Materiel", "RH", "Autre"];
 
+import { Expense } from "@/lib/data";
+
 export default function JournalPage() {
-  const { myExpenses, addExpense, currentUser } = useAuth();
+  const { myExpenses, addExpense, updateExpense, deleteExpense, currentUser } = useAuth();
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"recettes" | "depenses">("recettes");
   const [catFilter, setCatFilter] = useState("Toutes");
   const [showModal, setShowModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [form, setForm] = useState({ libelle: "", categorie: "Charges", montant: "", date: new Date().toISOString().split("T")[0] });
 
   const etabInfo = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
@@ -45,16 +48,26 @@ export default function JournalPage() {
 
   const handleAddExpense = () => {
     if (!form.libelle || !form.montant) return;
-    addExpense({
-      libelle: form.libelle,
-      categorie: form.categorie,
-      montant: Number(form.montant),
-      date: form.date,
-      etablissement: currentUser!.etablissement,
-      agentId: currentUser!.id,
-      agentNom: `${currentUser!.prenom} ${currentUser!.nom}`,
-    });
+    if (editingExpense) {
+      updateExpense(editingExpense.id, {
+        libelle: form.libelle,
+        categorie: form.categorie,
+        montant: Number(form.montant),
+        date: form.date,
+      });
+    } else {
+      addExpense({
+        libelle: form.libelle,
+        categorie: form.categorie,
+        montant: Number(form.montant),
+        date: form.date,
+        etablissement: currentUser!.etablissement,
+        agentId: currentUser!.id,
+        agentNom: `${currentUser!.prenom} ${currentUser!.nom}`,
+      });
+    }
     setShowModal(false);
+    setEditingExpense(null);
     setForm({ libelle: "", categorie: "Charges", montant: "", date: new Date().toISOString().split("T")[0] });
   };
 
@@ -180,7 +193,7 @@ export default function JournalPage() {
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>{["Date", "Libelle", "Categorie", "Agent", "Montant"].map(h => (
+                  <tr>{["Date", "Libelle", "Categorie", "Agent", "Montant", "Actions"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                   ))}</tr>
                 </thead>
@@ -192,6 +205,17 @@ export default function JournalPage() {
                       <td className="px-4 py-3"><span className="bg-red-50 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">{e.categorie}</span></td>
                       <td className="px-4 py-3 text-xs text-slate-500">{e.agentNom}</td>
                       <td className="px-4 py-3 font-bold text-red-700">{formatMGA(e.montant)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button onClick={() => {
+                            setEditingExpense(e);
+                            setForm({ libelle: e.libelle, categorie: e.categorie, montant: String(e.montant), date: e.date });
+                            setShowModal(true);
+                          }} className="text-slate-400 hover:text-blue-600 transition-colors"><Edit3 size={14} /></button>
+                          <button onClick={() => { if (confirm("Supprimer cette dépense ?")) deleteExpense(e.id); }}
+                            className="text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -208,7 +232,19 @@ export default function JournalPage() {
             <div className="md:hidden divide-y divide-slate-100">
               {filteredExpenses.map(e => (
                 <div key={e.id} className="p-4 flex justify-between items-start">
-                  <div><div className="font-medium text-slate-800 text-sm">{e.libelle}</div><div className="text-xs text-slate-400 mt-0.5">{e.categorie} · {e.date}</div></div>
+                  <div className="flex-1">
+                    <div className="font-medium text-slate-800 text-sm">{e.libelle}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{e.categorie} · {e.date}</div>
+                    <div className="flex gap-4 mt-2">
+                      <button onClick={() => {
+                        setEditingExpense(e);
+                        setForm({ libelle: e.libelle, categorie: e.categorie, montant: String(e.montant), date: e.date });
+                        setShowModal(true);
+                      }} className="text-xs text-blue-600 font-medium">Modifier</button>
+                      <button onClick={() => { if (confirm("Supprimer ?")) deleteExpense(e.id); }}
+                        className="text-xs text-red-600 font-medium">Supprimer</button>
+                    </div>
+                  </div>
                   <span className="font-bold text-red-700 text-sm">{formatMGA(e.montant)}</span>
                 </div>
               ))}
@@ -222,8 +258,9 @@ export default function JournalPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Nouvelle depense</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">x</button>
+              <h2 className="text-lg font-bold text-slate-900">{editingExpense ? "Modifier la depense" : "Nouvelle depense"}</h2>
+              <button onClick={() => { setShowModal(false); setEditingExpense(null); setForm({ libelle: "", categorie: "Charges", montant: "", date: new Date().toISOString().split("T")[0] }); }}
+                className="text-slate-400 hover:text-slate-600 text-xl leading-none">x</button>
             </div>
             <div className="space-y-3">
               <div>
@@ -257,10 +294,12 @@ export default function JournalPage() {
               </div>
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={() => setShowModal(false)}
+              <button onClick={() => { setShowModal(false); setEditingExpense(null); setForm({ libelle: "", categorie: "Charges", montant: "", date: new Date().toISOString().split("T")[0] }); }}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
               <button onClick={handleAddExpense}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">Enregistrer</button>
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">
+                {editingExpense ? "Mettre à jour" : "Enregistrer"}
+              </button>
             </div>
           </div>
         </div>

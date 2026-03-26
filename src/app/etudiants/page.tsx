@@ -5,10 +5,10 @@ import {
   Phone, Mail, GraduationCap, CreditCard, Calendar,
   MapPin, Edit3, Trash2, AlertTriangle, Users,
   CheckCircle2, Clock, ChevronDown, Plus, Check,
-  Printer, Receipt, ArrowLeft, Download
+  Printer, Receipt, ArrowLeft, Download, Settings
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { ETABLISSEMENTS } from "@/lib/data";
+import { ETABLISSEMENTS, Etablissement } from "@/lib/data";
 import {
   fetchStudents, fetchEcolages, fetchPaiements, createPaiement,
   updateEcolage, DBStudent, DBEcolage, DBPaiement,
@@ -27,7 +27,7 @@ const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","
 type FilterTab = "tous" | "paye" | "impaye" | "en_attente";
 
 export default function EtudiantsPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, appState, setProgramFee } = useAuth();
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
   const [allPaiements, setAllPaiements] = useState<DBPaiement[]>([]);
@@ -49,6 +49,7 @@ export default function EtudiantsPage() {
   const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
   const [editStudent,     setEditStudent]     = useState<DBStudent | null>(null);
   const [addEcolageStudent, setAddEcolageStudent] = useState<DBStudent | null>(null);
+  const [showConfig,      setShowConfig]      = useState(false);
   const [deleteEcolage,   setDeleteEcolage]   = useState<DBEcolage | null>(null);
   const [deletePaiement,  setDeletePaiement]  = useState<DBPaiement | null>(null);
 
@@ -159,6 +160,37 @@ export default function EtudiantsPage() {
     await load(); setSaving(false); setAddEcolageStudent(null);
   };
 
+  const handleApplyConfig = async () => {
+    if (!currentUser) return;
+    setSaving(true);
+    const { createEcolage } = await import("@/lib/api");
+
+    // For each student in this campus without ecolage
+    const myEtab = currentUser.etablissement;
+    const studentsWithoutEcolage = filtered.filter(s => !getEcolage(s));
+
+    for (const s of studentsWithoutEcolage) {
+      const config = appState.programFees.find(p => p.campus === myEtab && p.filiere === s.filiere);
+      if (config && config.amount > 0) {
+        await createEcolage({
+          etudiantId: getStudentId(s),
+          etudiantNom: getStudentName(s),
+          matricule: s.matricule,
+          campus: s.campus || myEtab,
+          filiere: s.filiere || "",
+          classe: s.niveau || "L1",
+          montantDu: config.amount,
+          montantPaye: 0,
+          statut: "impaye",
+          annee: "2025/2026",
+        });
+      }
+    }
+    await load();
+    setSaving(false);
+    setShowConfig(false);
+  };
+
   const handleDeleteEcolage = async () => {
     if (!deleteEcolage) return;
     setDeleting(true);
@@ -267,6 +299,10 @@ export default function EtudiantsPage() {
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
           >
             <Printer size={15} /> Imprimer liste
+          </button>
+          <button onClick={() => setShowConfig(true)}
+            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
+            <Settings size={15} /> Configuration
           </button>
           <a href="https://groupegsi.mg/web/admincreat/" target="_blank" rel="noreferrer"
             className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md"
@@ -880,6 +916,54 @@ export default function EtudiantsPage() {
               <button onClick={handleDeleteEcolage} disabled={deleting}
                 className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold disabled:opacity-60 flex items-center justify-center gap-2">
                 {deleting ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : <><Trash2 size={15} />Supprimer</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── CONFIGURATION MODAL ─── */}
+      {showConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Configuration des Écolages</h2>
+                <p className="text-xs text-slate-400">Définissez les montants par filière pour {etabInfo?.label}</p>
+              </div>
+              <button onClick={() => setShowConfig(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
+            </div>
+
+            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-2">
+              {filieres.map(f => {
+                const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === f);
+                return (
+                  <div key={f} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-slate-800 truncate">{f}</div>
+                    </div>
+                    <div className="w-40 relative">
+                      <input type="number" placeholder="Montant Ar"
+                        value={config?.amount || ""}
+                        onChange={e => setProgramFee(currentUser!.etablissement, f, Number(e.target.value))}
+                        className="w-full pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">Ar</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
+              <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+              <p className="text-xs text-amber-700">Appliquer la configuration créera automatiquement les écolages manquants pour tous les étudiants de ce campus selon leur filière.</p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowConfig(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Fermer</button>
+              <button onClick={handleApplyConfig} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold shadow-md disabled:opacity-50 flex items-center justify-center gap-2" style={{background:etabColor}}>
+                {saving ? "Calcul..." : "Appliquer à tous"}
               </button>
             </div>
           </div>

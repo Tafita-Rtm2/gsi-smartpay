@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Users, Plus, Trash2, Edit3, Eye, EyeOff, CheckCircle2,
   XCircle, Building2, CreditCard, GraduationCap, TrendingUp,
-  ChevronDown, Search, Shield, BarChart3, RefreshCw, Trash
+  ChevronDown, Search, Shield, BarChart3, RefreshCw, Trash, X
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS, Etablissement, User, Role, formatMGA } from "@/lib/data";
@@ -112,66 +112,69 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Administration GSI</h1>
-          <p className="text-white/40 text-sm mt-0.5">Vision globale — donnees reelles</p>
+          <h1 className="text-2xl font-bold text-slate-900">Administration GSI</h1>
+          <p className="text-slate-500 text-sm mt-0.5">Vision globale des établissements</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={handleResetData} disabled={resetting || loading}
-            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-xl text-xs font-medium transition-colors border border-red-500/20">
-            <Trash size={13} className={resetting ? "animate-pulse" : ""} />
-            <span className="hidden sm:inline">Réinitialiser tout à 0</span>
+            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border border-red-100 shadow-sm">
+            <Trash size={14} className={resetting ? "animate-pulse" : ""} />
+            <span>Réinitialiser tout à 0</span>
           </button>
-          <button onClick={load} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-xs font-medium transition-colors border border-white/10">
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          <button onClick={load} className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border border-slate-200 shadow-sm">
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
-          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl">
-            <Shield size={14} className="text-amber-400" />
-            <span className="text-amber-400 text-xs font-bold">ADMIN</span>
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-xl shadow-sm">
+            <Shield size={14} className="text-amber-600" />
+            <span className="text-amber-600 text-xs font-bold">ADMIN</span>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-2xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-slate-200/50 border border-slate-200 rounded-2xl p-1 overflow-x-auto shadow-inner">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={clsx("flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all",
-              tab === id ? "bg-amber-500 text-slate-900" : "text-white/50 hover:text-white/80")}>
-            <Icon size={15} />{label}
+            className={clsx("flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all",
+              tab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800")}>
+            <Icon size={16} />{label}
           </button>
         ))}
       </div>
 
       {/* ── APERCU ── */}
       {tab === "apercu" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: "Utilisateurs", value: appState.users.filter(u => u.role !== "admin").length, icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
-              { label: "Etudiants", value: loading ? "..." : students.length, icon: GraduationCap, color: "text-violet-400", bg: "bg-violet-500/10" },
-              { label: "Paiements", value: loading ? "..." : formatMGA(paiements.reduce((s,p)=>s+p.montant,0)), icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-              { label: "Etablissements", value: 4, icon: Building2, color: "text-amber-400", bg: "bg-amber-500/10" },
-            ].map(({ label, value, icon: Icon, color, bg }) => (
-              <div key={label} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                <div className={clsx("w-9 h-9 rounded-xl flex items-center justify-center mb-3", bg)}>
-                  <Icon size={18} className={color} />
+              { label: "Utilisateurs", value: appState.users.filter(u => u.role !== "admin").length, icon: Users, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-100" },
+              { label: "Etudiants", value: loading ? "..." : students.length, icon: GraduationCap, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-100" },
+              { label: "Encaissements", value: loading ? "..." : formatMGA(paiements.reduce((s,p)=>s+p.montant,0)), icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
+              { label: "Campus", value: 4, icon: Building2, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-100" },
+            ].map(({ label, value, icon: Icon, color, bg, border }) => (
+              <div key={label} className={`bg-white border ${border} rounded-[1.5rem] p-6 shadow-sm`}>
+                <div className={clsx("w-10 h-10 rounded-xl flex items-center justify-center mb-4", bg)}>
+                  <Icon size={20} className={color} />
                 </div>
-                <div className={clsx("text-xl font-bold", color)}>{value}</div>
-                <div className="text-white/40 text-xs mt-0.5">{label}</div>
+                <div className={clsx("text-2xl font-black tracking-tight", color)}>{value}</div>
+                <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">{label}</div>
               </div>
             ))}
           </div>
 
           {/* Trend Chart */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-white font-bold">Evolution des encaissements globaux</h3>
-              <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+          <div className="bg-white border border-slate-200 rounded-[1.5rem] p-8 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div>
+                <h3 className="text-slate-900 font-bold text-lg">Évolution des encaissements globaux</h3>
+                <p className="text-slate-400 text-sm">Suivi temporel de toutes les transactions</p>
+              </div>
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                 {(["jour", "mois", "annee"] as const).map(scale => (
                   <button key={scale} onClick={() => setTimeScale(scale)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${timeScale === scale ? "bg-amber-500 text-slate-900" : "text-white/40 hover:text-white/80"}`}>
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${timeScale === scale ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}>
                     {scale}
                   </button>
                 ))}
@@ -193,18 +196,23 @@ export default function AdminPage() {
 
               const maxVal = Math.max(...chartData.map(c => c[1]), 1);
 
-              if (chartData.length === 0) return <div className="h-40 flex items-center justify-center text-white/20 text-sm italic">Aucune donnee</div>;
+              if (chartData.length === 0) return (
+                <div className="h-48 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-2xl">
+                  <BarChart3 size={32} className="opacity-20 mb-2" />
+                  <p className="text-sm font-medium italic">Aucune donnée disponible</p>
+                </div>
+              );
 
               return (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {chartData.map(([label, val]) => (
                     <div key={label} className="group">
-                      <div className="flex justify-between text-[10px] font-bold mb-1 px-1">
-                        <span className="text-white/40">{label}</span>
-                        <span className="text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">{formatMGA(val)}</span>
+                      <div className="flex justify-between text-[11px] font-black mb-2 px-1">
+                        <span className="text-slate-400 uppercase tracking-tighter">{label}</span>
+                        <span className="text-emerald-600">{formatMGA(val)}</span>
                       </div>
-                      <div className="h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                        <div className="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-500"
+                      <div className="h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                        <div className="h-full bg-gradient-to-r from-brand-600 to-brand-400 rounded-full transition-all duration-700 ease-out"
                           style={{ width: `${(val / maxVal) * 100}%` }} />
                       </div>
                     </div>
@@ -214,27 +222,28 @@ export default function AdminPage() {
             })()}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {stats.map(({ id, info, students: sc, users, totalPaye, totalDu, taux }) => (
-              <div key={id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-3 h-10 rounded-full" style={{background:info.color}} />
+              <div key={id} className="bg-white border border-slate-200 rounded-[1.5rem] p-6 shadow-sm hover:border-slate-300 transition-colors">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-4 h-12 rounded-full shadow-inner" style={{background:info.color}} />
                   <div>
-                    <div className="text-white font-bold text-sm">{info.label}</div>
-                    <div className="text-white/40 text-xs">{users} agent(s) · {sc} etudiant(s)</div>
+                    <div className="text-slate-900 font-black text-base">{info.label}</div>
+                    <div className="text-slate-400 text-xs font-medium">{users} agent(s) · {sc} étudiant(s)</div>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">Recouvrement</span>
-                    <span className="font-bold text-white">{taux}%</span>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                    <span className="text-slate-400">Taux de recouvrement</span>
+                    <span className="text-slate-900">{taux}%</span>
                   </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{width:`${taux}%`,background:taux>=70?"#22c55e":taux>=40?"#f59e0b":"#ef4444"}} />
+                  <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                    <div className="h-full rounded-full transition-all duration-1000"
+                         style={{width:`${taux}%`,background:taux>=70?"#10b981":taux>=40?"#f59e0b":"#ef4444"}} />
                   </div>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className="text-emerald-400">{formatMGA(totalPaye)}</span>
-                    <span className="text-white/30">/ {formatMGA(totalDu)}</span>
+                  <div className="flex justify-between items-center pt-2">
+                    <div className="text-emerald-600 font-black text-sm">{formatMGA(totalPaye)}</div>
+                    <div className="text-slate-300 font-bold text-[10px]">OBJECTIF: {formatMGA(totalDu)}</div>
                   </div>
                 </div>
               </div>
@@ -245,70 +254,69 @@ export default function AdminPage() {
 
       {/* ── UTILISATEURS ── */}
       {tab === "utilisateurs" && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 justify-between">
-            <div className="flex gap-3 flex-1">
-              <div className="relative flex-1 max-w-sm">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-                <input type="text" placeholder="Rechercher..." value={searchUser}
+        <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-400">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex gap-3 flex-1 w-full">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="text" placeholder="Rechercher par nom ou identifiant..." value={searchUser}
                   onChange={e => setSearchUser(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                  className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all" />
               </div>
               <div className="relative">
                 <select value={filterEtab} onChange={e => setFilterEtab(e.target.value as "tous"|Etablissement)}
-                  className="appearance-none pl-3 pr-8 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50">
-                  <option value="tous">Tous</option>
-                  {ETAB_LIST.map(([id]) => <option key={id} value={id}>{id}</option>)}
+                  className="appearance-none pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                  <option value="tous">Tous les campus</option>
+                  {ETAB_LIST.map(([id]) => <option key={id} value={id}>{id.charAt(0).toUpperCase() + id.slice(1)}</option>)}
                 </select>
-                <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
             </div>
             <button onClick={() => setShowCreateUser(true)}
-              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-2 rounded-xl text-sm font-bold transition-colors self-start">
-              <Plus size={15} /> Creer un compte
+              className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg shadow-brand-600/20 w-full sm:w-auto justify-center">
+              <Plus size={18} /> Créer un compte
             </button>
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b border-white/10">
-                  <tr>{["Identifiant","Nom complet","Role","Etablissement","Cree le","Statut","Actions"].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-white/40 px-4 py-3">{h}</th>
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>{["Identifiant","Agent","Rôle","Campus","Statut","Actions"].map(h => (
+                    <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
                   ))}</tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {filteredUsers.map(u => (
-                    <tr key={u.id} className={clsx("hover:bg-white/5 transition-colors", !u.actif && "opacity-50")}>
-                      <td className="px-4 py-3 font-mono text-xs text-amber-400">{u.username}</td>
-                      <td className="px-4 py-3 font-semibold text-white">{u.prenom} {u.nom}</td>
-                      <td className="px-4 py-3">
-                        <span className={clsx("text-xs font-bold px-2 py-0.5 rounded-full",
-                          u.role==="admin"?"bg-amber-500/20 text-amber-400":u.role==="comptable"?"bg-blue-500/20 text-blue-400":"bg-emerald-500/20 text-emerald-400")}>
+                    <tr key={u.id} className={clsx("hover:bg-slate-50 transition-colors", !u.actif && "opacity-60")}>
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-brand-600">{u.username}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900">{u.prenom} {u.nom}</td>
+                      <td className="px-6 py-4">
+                        <span className={clsx("text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider",
+                          u.role==="admin"?"bg-amber-100 text-amber-700":u.role==="comptable"?"bg-blue-100 text-blue-700":"bg-emerald-100 text-emerald-700")}>
                           {u.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full text-white font-semibold" style={{background:ETABLISSEMENTS[u.etablissement].color+"44"}}>
+                      <td className="px-6 py-4">
+                        <span className="text-[10px] px-2.5 py-1 rounded-lg text-white font-black uppercase tracking-wider shadow-sm" style={{background:ETABLISSEMENTS[u.etablissement].color}}>
                           {u.etablissement}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-white/40 text-xs">{u.createdAt}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4">
                         {u.actif
-                          ? <span className="flex items-center gap-1 text-emerald-400 text-xs"><CheckCircle2 size={12}/>Actif</span>
-                          : <span className="flex items-center gap-1 text-red-400 text-xs"><XCircle size={12}/>Desactive</span>}
+                          ? <span className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs"><CheckCircle2 size={14}/>Actif</span>
+                          : <span className="flex items-center gap-1.5 text-red-400 font-bold text-xs"><XCircle size={14}/>Désactivé</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-6 py-4">
                         {u.role !== "admin" && (
                           <div className="flex gap-2">
                             <button onClick={() => updateUser(u.id, {actif:!u.actif})}
-                              className="text-xs px-2 py-1 rounded-lg border border-white/10 text-white/50 hover:text-white transition-all">
-                              {u.actif ? "Desactiver" : "Activer"}
+                              className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+                              {u.actif ? "Bloquer" : "Activer"}
                             </button>
-                            <button onClick={() => { if(confirm("Supprimer ce compte ?")) deleteUser(u.id); }}
-                              className="text-xs px-2 py-1 rounded-lg border border-red-400/20 text-red-400 hover:bg-red-400/10 transition-all">
-                              <Trash2 size={12} />
+                            <button onClick={() => { if(confirm("Supprimer définitivement ce compte ?")) deleteUser(u.id); }}
+                              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all">
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         )}
@@ -318,32 +326,32 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-            <div className="md:hidden divide-y divide-white/5">
+            <div className="md:hidden divide-y divide-slate-100">
               {filteredUsers.map(u => (
-                <div key={u.id} className={clsx("p-4 space-y-2", !u.actif && "opacity-50")}>
+                <div key={u.id} className={clsx("p-5 space-y-3", !u.actif && "opacity-60")}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="text-white font-semibold">{u.prenom} {u.nom}</div>
-                      <div className="font-mono text-xs text-amber-400">{u.username}</div>
+                      <div className="text-slate-900 font-black">{u.prenom} {u.nom}</div>
+                      <div className="font-mono text-xs font-bold text-brand-600 mt-0.5">{u.username}</div>
                     </div>
-                    <span className={clsx("text-xs font-bold px-2 py-0.5 rounded-full",
-                      u.role==="admin"?"bg-amber-500/20 text-amber-400":u.role==="comptable"?"bg-blue-500/20 text-blue-400":"bg-emerald-500/20 text-emerald-400")}>
+                    <span className={clsx("text-[10px] font-black uppercase px-2 py-0.5 rounded-lg",
+                      u.role==="admin"?"bg-amber-100 text-amber-700":u.role==="comptable"?"bg-blue-100 text-blue-700":"bg-emerald-100 text-emerald-700")}>
                       {u.role}
                     </span>
                   </div>
-                  <div className="flex gap-2 text-xs">
-                    <span className="px-2 py-0.5 rounded-full text-white font-semibold" style={{background:ETABLISSEMENTS[u.etablissement].color+"44"}}>{u.etablissement}</span>
-                    {u.actif ? <span className="text-emerald-400">Actif</span> : <span className="text-red-400">Desactive</span>}
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] px-2.5 py-1 rounded-lg text-white font-black uppercase tracking-wider" style={{background:ETABLISSEMENTS[u.etablissement].color}}>{u.etablissement}</span>
+                    {u.actif ? <span className="text-emerald-600 text-[10px] font-black">ACTIF</span> : <span className="text-red-400 text-[10px] font-black">BLOQUÉ</span>}
                   </div>
                   {u.role !== "admin" && (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 pt-1">
                       <button onClick={() => updateUser(u.id,{actif:!u.actif})}
-                        className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-white/50 hover:text-white">
-                        {u.actif ? "Desactiver" : "Activer"}
+                        className="flex-1 py-2 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        {u.actif ? "Désactiver" : "Activer"}
                       </button>
                       <button onClick={() => { if(confirm("Supprimer ?")) deleteUser(u.id); }}
-                        className="text-xs px-3 py-1.5 rounded-lg border border-red-400/20 text-red-400">
-                        Supprimer
+                        className="px-4 py-2 rounded-xl bg-red-50 text-red-600">
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   )}
@@ -356,49 +364,56 @@ export default function AdminPage() {
 
       {/* ── ETUDIANTS ── */}
       {tab === "etudiants" && (
-        <div className="space-y-4">
-          <div className="relative max-w-sm">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input type="text" placeholder="Rechercher un etudiant..." value={searchStudent}
-              onChange={e => setSearchStudent(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+        <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-400">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="relative w-full max-w-lg">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="Chercher un étudiant par nom ou matricule..." value={searchStudent}
+                onChange={e => setSearchStudent(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all" />
+            </div>
           </div>
-        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-          {loading ? (
-            <div className="py-10 text-center text-white/40">Chargement...</div>
-          ) : (
-            <>
-              <div className="hidden md:block overflow-x-auto">
+
+          <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
+            {loading ? (
+              <div className="py-20 text-center flex flex-col items-center gap-3">
+                <RefreshCw className="animate-spin text-brand-600" size={32} />
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Chargement des données...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b border-white/10">
-                    <tr>{["Nom","Matricule","Filiere","Campus","Ecolage","Statut"].map(h => (
-                      <th key={h} className="text-left text-xs font-semibold text-white/40 px-4 py-3">{h}</th>
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>{["Étudiant","Filière","Campus","Écolage","Statut"].map(h => (
+                      <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
                     ))}</tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-slate-100">
                     {students.filter(s => {
                       const q = searchStudent.toLowerCase();
                       return getStudentName(s).toLowerCase().includes(q) || (s.matricule||"").toLowerCase().includes(q);
                     }).map(s => {
                       const ec = ecolages.find(e => e.etudiantId === getStudentId(s));
                       return (
-                        <tr key={getStudentId(s)} className="hover:bg-white/5">
-                          <td className="px-4 py-3 font-semibold text-white">{getStudentName(s)}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-white/50">{s.matricule||"—"}</td>
-                          <td className="px-4 py-3 text-xs text-white/60 max-w-[160px] truncate">{s.filiere||"—"}</td>
-                          <td className="px-4 py-3 text-xs text-white/50">{s.campus||"—"}</td>
-                          <td className="px-4 py-3">
+                        <tr key={getStudentId(s)} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="font-black text-slate-900">{getStudentName(s)}</div>
+                            <div className="font-mono text-[10px] text-slate-400 mt-0.5">{s.matricule||"PAS DE MATRICULE"}</div>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-bold text-slate-500">{s.filiere||"—"}</td>
+                          <td className="px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-400">{s.campus||"—"}</td>
+                          <td className="px-6 py-4">
                             {ec && ec.montantDu > 0 ? (
                               <div className="text-xs">
-                                <div className="text-white/70">{formatMGA(ec.montantDu)}</div>
-                                <div className="text-emerald-400">{formatMGA(ec.montantPaye)}</div>
+                                <div className="text-slate-900 font-black">{formatMGA(ec.montantDu)}</div>
+                                <div className="text-emerald-600 font-bold mt-0.5">{formatMGA(ec.montantPaye)} encaissé</div>
                               </div>
-                            ) : <span className="text-white/20 text-xs italic">Non defini</span>}
+                            ) : <span className="text-slate-300 text-[10px] font-bold italic uppercase">Non défini</span>}
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={clsx("text-xs font-bold px-2 py-0.5 rounded-full",
-                              ec?.statut==="paye"?"bg-emerald-500/20 text-emerald-400":ec?.statut==="en_attente"?"bg-amber-500/20 text-amber-400":"bg-red-500/20 text-red-400")}>
-                              {ec?.statut==="paye"?"Paye":ec?.statut==="en_attente"?"En attente":"Impaye"}
+                          <td className="px-6 py-4">
+                            <span className={clsx("text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg",
+                              ec?.statut==="paye"?"bg-emerald-100 text-emerald-700":ec?.statut==="en_attente"?"bg-amber-100 text-amber-700":"bg-red-100 text-red-700")}>
+                              {ec?.statut==="paye"?"Payé":ec?.statut==="en_attente"?"En attente":"Impayé"}
                             </span>
                           </td>
                         </tr>
@@ -407,155 +422,139 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="md:hidden divide-y divide-white/5">
-                {students.filter(s => {
-                      const q = searchStudent.toLowerCase();
-                      return getStudentName(s).toLowerCase().includes(q) || (s.matricule||"").toLowerCase().includes(q);
-                    }).map(s => {
-                  const ec = ecolages.find(e => e.etudiantId === getStudentId(s));
-                  return (
-                    <div key={getStudentId(s)} className="p-4 space-y-1">
-                      <div className="text-white font-semibold text-sm">{getStudentName(s)}</div>
-                      <div className="text-white/40 text-xs">{s.filiere} · {s.campus}</div>
-                      {ec && ec.montantDu > 0 && (
-                        <div className="text-xs text-emerald-400">{formatMGA(ec.montantPaye)} / {formatMGA(ec.montantDu)}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* ── PAIEMENTS ── */}
       {tab === "paiements" && (
-        <div className="space-y-4">
-          <div className="relative max-w-sm">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input type="text" placeholder="Rechercher un paiement..." value={searchPaiement}
-              onChange={e => setSearchPaiement(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/25 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+        <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-400">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="relative w-full max-w-lg">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="Chercher un paiement par référence ou étudiant..." value={searchPaiement}
+                onChange={e => setSearchPaiement(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all" />
+            </div>
           </div>
-        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-          {loading ? (
-            <div className="py-10 text-center text-white/40">Chargement...</div>
-          ) : paiements.length === 0 ? (
-            <div className="py-10 text-center text-white/40 text-sm">Aucun paiement</div>
-          ) : (
-            <>
-              <div className="hidden md:block overflow-x-auto">
+
+          <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
+            {loading ? (
+              <div className="py-20 text-center flex flex-col items-center gap-3">
+                <RefreshCw className="animate-spin text-brand-600" size={32} />
+                <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Chargement des transactions...</p>
+              </div>
+            ) : paiements.length === 0 ? (
+              <div className="py-20 text-center flex flex-col items-center text-slate-300">
+                <CreditCard size={48} className="opacity-20 mb-4" />
+                <p className="font-bold uppercase tracking-widest text-xs">Aucun paiement enregistré</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b border-white/10">
-                    <tr>{["Reference","Etudiant","Montant","Mode","Date","Note","Agent"].map(h => (
-                      <th key={h} className="text-left text-xs font-semibold text-white/40 px-4 py-3">{h}</th>
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>{["Réf","Étudiant","Montant","Date","Campus","Agent"].map(h => (
+                      <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
                     ))}</tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-slate-100">
                     {paiements.filter(p => {
                       const q = searchPaiement.toLowerCase();
                       return p.etudiantNom.toLowerCase().includes(q) || (p.reference||"").toLowerCase().includes(q);
                     }).map((p, i) => (
-                      <tr key={p.id||p._id||i} className="hover:bg-white/5">
-                        <td className="px-4 py-3 font-mono text-xs text-amber-400">{p.reference||"—"}</td>
-                        <td className="px-4 py-3 text-white font-semibold">{p.etudiantNom}</td>
-                        <td className="px-4 py-3 text-emerald-400 font-bold">{formatMGA(p.montant)}</td>
-                        <td className="px-4 py-3"><span className="bg-white/10 text-white/60 text-xs px-2 py-0.5 rounded-full">{p.mode}</span></td>
-                        <td className="px-4 py-3 text-white/40 text-xs">{p.date}</td>
-                        <td className="px-4 py-3 text-white/40 text-xs">{p.note||"—"}</td>
-                        <td className="px-4 py-3 text-white/60 text-xs">{p.agentNom}</td>
+                      <tr key={p.id||p._id||i} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-mono text-[10px] font-black text-brand-600">{p.reference||"—"}</td>
+                        <td className="px-6 py-4 font-black text-slate-900">{p.etudiantNom}</td>
+                        <td className="px-6 py-4 font-black text-emerald-600">{formatMGA(p.montant)}</td>
+                        <td className="px-6 py-4 text-xs font-bold text-slate-500">{p.date}</td>
+                        <td className="px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-400">{p.campus}</td>
+                        <td className="px-6 py-4 text-xs font-bold text-slate-400">{p.agentNom}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="md:hidden divide-y divide-white/5">
-                {paiements.filter(p => {
-                      const q = searchPaiement.toLowerCase();
-                      return p.etudiantNom.toLowerCase().includes(q) || (p.reference||"").toLowerCase().includes(q);
-                    }).map((p, i) => (
-                  <div key={p.id||p._id||i} className="p-4 space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-white font-semibold text-sm">{p.etudiantNom}</span>
-                      <span className="text-emerald-400 font-bold">{formatMGA(p.montant)}</span>
-                    </div>
-                    <div className="flex gap-2 text-xs text-white/40">
-                      <span>{p.date}</span><span>{p.note||""}</span><span>{p.agentNom}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* ── CREATE USER MODAL ── */}
       {showCreateUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-white font-bold text-lg">Creer un compte</h2>
-              <button onClick={() => setShowCreateUser(false)} className="text-white/40 hover:text-white text-xl leading-none">x</button>
-            </div>
-            <div className="space-y-3">
-              {[
-                { label: "Prenom", key: "prenom", placeholder: "Ex: Jean" },
-                { label: "Nom", key: "nom", placeholder: "Ex: Rakoto" },
-                { label: "Identifiant (username)", key: "username", placeholder: "Ex: agent.analakely" },
-              ].map(({ label, key, placeholder }) => (
-                <div key={key}>
-                  <label className="text-xs font-semibold text-white/50 block mb-1">{label}</label>
-                  <input type="text" placeholder={placeholder}
-                    value={String((form as Record<string, unknown>)[key] ?? "")}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
-                </div>
-              ))}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <label className="text-xs font-semibold text-white/50 block mb-1">Mot de passe</label>
+                <h2 className="text-slate-900 font-black text-xl">Créer un compte</h2>
+                <p className="text-slate-400 text-sm">Nouvel accès collaborateur</p>
+              </div>
+              <button onClick={() => setShowCreateUser(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: "Prénom", key: "prenom", placeholder: "Ex: Jean" },
+                  { label: "Nom", key: "nom", placeholder: "Ex: Rakoto" },
+                ].map(({ label, key, placeholder }) => (
+                  <div key={key}>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">{label}</label>
+                    <input type="text" placeholder={placeholder}
+                      value={String((form as Record<string, unknown>)[key] ?? "")}
+                      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Identifiant unique</label>
+                <input type="text" placeholder="Ex: agent.analakely"
+                  value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Mot de passe provisoire</label>
                 <div className="relative">
-                  <input type={showPwd ? "text" : "password"} placeholder="Mot de passe"
+                  <input type={showPwd ? "text" : "password"} placeholder="••••••••"
                     value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))}
-                    className="w-full pl-3 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
                   <button type="button" onClick={() => setShowPwd(s=>!s)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-                    {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-white/50 block mb-1">Role</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Rôle</label>
                   <div className="relative">
                     <select value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value as Role}))}
-                      className="appearance-none w-full px-3 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50">
-                      {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                      className="appearance-none w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                      {ROLES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
                     </select>
-                    <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-white/50 block mb-1">Etablissement</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Campus</label>
                   <div className="relative">
                     <select value={form.etablissement} onChange={e => setForm(f => ({...f, etablissement: e.target.value as Etablissement}))}
-                      className="appearance-none w-full px-3 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50">
-                      {ETAB_LIST.map(([id]) => <option key={id} value={id}>{id}</option>)}
+                      className="appearance-none w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                      {ETAB_LIST.map(([id]) => <option key={id} value={id}>{id.toUpperCase()}</option>)}
                     </select>
-                    <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
               </div>
-              {formError && <p className="text-red-400 text-xs">{formError}</p>}
+              {formError && <p className="bg-red-50 text-red-600 text-[10px] font-black p-3 rounded-lg border border-red-100 uppercase tracking-widest">{formError}</p>}
             </div>
-            <div className="flex gap-3 mt-5">
+            <div className="flex gap-4 mt-8">
               <button onClick={() => { setShowCreateUser(false); setFormError(""); }}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 text-sm hover:bg-white/5">Annuler</button>
+                className="flex-1 py-4 rounded-xl border border-slate-200 text-slate-400 text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-colors">Annuler</button>
               <button onClick={handleCreateUser}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 text-sm font-bold">Creer</button>
+                className="flex-1 py-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-600/20 transition-all">Créer</button>
             </div>
           </div>
         </div>
