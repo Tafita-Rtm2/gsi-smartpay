@@ -47,7 +47,6 @@ export default function EtudiantsPage() {
   const [payStudent,      setPayStudent]      = useState<DBStudent | null>(null);
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
-  const [addEcolageStudent, setAddEcolageStudent] = useState<DBStudent | null>(null);
   const [showConfig,      setShowConfig]      = useState(false);
   const [deleteEcolage,   setDeleteEcolage]   = useState<DBEcolage | null>(null);
   const [deletePaiement,  setDeletePaiement]  = useState<DBPaiement | null>(null);
@@ -56,7 +55,6 @@ export default function EtudiantsPage() {
     mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()),
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
   });
-  const [addEcolageForm, setAddEcolageForm] = useState({ montantDu: "1500000", annee: "2025/2026" });
 
   const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
   const isAdmin   = currentUser?.role === "admin";
@@ -90,7 +88,8 @@ export default function EtudiantsPage() {
     const q = search.toLowerCase().trim();
     const name = getStudentName(s).toLowerCase();
     const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
-    const ok2 = filiereFilter === "Toutes" || (s.filiere||"").trim() === filiereFilter.trim();
+    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "et").replace(/\s+/g, " ").trim();
+    const ok2 = filiereFilter === "Toutes" || normalize(s.filiere||"") === normalize(filiereFilter);
     const ec = getEcolage(s);
     const ok3 = statutTab === "tous" || (ec?.statut || "impaye") === statutTab;
     return ok1 && ok2 && ok3;
@@ -102,9 +101,30 @@ export default function EtudiantsPage() {
   const totalDu    = ecolages.reduce((a,e) => a+e.montantDu, 0);
   const totalPaye2 = ecolages.reduce((a,e) => a+e.montantPaye, 0);
 
-  const openPayment = (s: DBStudent) => {
+  const openPayment = async (s: DBStudent) => {
+    let ec = getEcolage(s);
+    // If no ecolage, try to auto-create from config
+    if (!ec) {
+      const config = appState.programFees.find(p => p.campus === (s.campus?.toLowerCase() || "") && p.filiere === s.filiere);
+      const amount = config?.amount || 1500000;
+      const { createEcolage } = await import("@/lib/api");
+      const result = await createEcolage({
+        etudiantId: getStudentId(s),
+        etudiantNom: getStudentName(s),
+        matricule: s.matricule,
+        campus: s.campus || currentUser?.etablissement || "",
+        filiere: s.filiere || "",
+        classe: s.niveau || "L1",
+        montantDu: amount,
+        montantPaye: 0,
+        statut: "impaye",
+        annee: "2025/2026",
+      });
+      if (result) ec = result;
+      await load();
+    }
     setPayStudent(s);
-    setPayEcolage(getEcolage(s) || null);
+    setPayEcolage(ec || null);
     setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
   };
 
@@ -166,24 +186,6 @@ export default function EtudiantsPage() {
   };
 
 
-  const handleAddEcolage = async () => {
-    if (!addEcolageStudent || !addEcolageForm.montantDu) return;
-    setSaving(true);
-    const { createEcolage } = await import("@/lib/api");
-    await createEcolage({
-      etudiantId: getStudentId(addEcolageStudent),
-      etudiantNom: getStudentName(addEcolageStudent),
-      matricule: addEcolageStudent.matricule,
-      campus: addEcolageStudent.campus || currentUser?.etablissement || "",
-      filiere: addEcolageStudent.filiere || "",
-      classe: addEcolageStudent.niveau || "L1",
-      montantDu: Number(addEcolageForm.montantDu),
-      montantPaye: 0,
-      statut: "impaye",
-      annee: addEcolageForm.annee,
-    });
-    await load(); setSaving(false); setAddEcolageStudent(null);
-  };
 
   const handleApplyConfig = async () => {
     if (!currentUser) return;
@@ -491,7 +493,7 @@ export default function EtudiantsPage() {
                                 </button>
                               </>
                             ) : (
-                              <button onClick={() => { setAddEcolageStudent(s); setAddEcolageForm({ montantDu: "1500000", annee: "2025/2026" }); }} title="Ajouter un ecolage"
+                              <button onClick={() => openPayment(s)} title="Ajouter un ecolage"
                                 className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-all border border-transparent hover:border-brand-200">
                                 <Plus size={14} />
                               </button>
@@ -553,7 +555,7 @@ export default function EtudiantsPage() {
                           </button>
                         </>
                       ) : (
-                        <button onClick={() => { setAddEcolageStudent(s); setAddEcolageForm({ montantDu: "1500000", annee: "2025/2026" }); }}
+                        <button onClick={() => openPayment(s)}
                           className="flex items-center gap-1 text-xs text-brand-600 border border-brand-200 px-2.5 py-1.5 rounded-lg hover:bg-brand-50">
                           <Plus size={12} /> Ajouter ecolage
                         </button>
@@ -982,43 +984,6 @@ export default function EtudiantsPage() {
         </div>
       )}
 
-      {/* ─── ADD ECOLAGE MODAL ─── */}
-      {addEcolageStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Definir l&apos;ecolage</h2>
-              <button onClick={() => setAddEcolageStudent(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
-            </div>
-            <div className="flex items-center gap-3 bg-brand-50 border border-brand-100 rounded-xl p-3">
-              <Avatar s={addEcolageStudent} size={40} />
-              <div><div className="font-bold text-slate-900 text-sm">{getStudentName(addEcolageStudent)}</div><div className="text-xs text-slate-400">{addEcolageStudent.matricule}</div></div>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Montant total de l&apos;ecolage (Ar)</label>
-              <input type="number" placeholder="Ex: 1500000" value={addEcolageForm.montantDu} onChange={e=>setAddEcolageForm(f=>({...f,montantDu:e.target.value}))} autoFocus
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Annee scolaire</label>
-              <div className="relative">
-                <select value={addEcolageForm.annee} onChange={e=>setAddEcolageForm(f=>({...f,annee:e.target.value}))}
-                  className="appearance-none w-full px-3 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                  {["2024/2025","2025/2026","2026/2027"].map(y=><option key={y}>{y}</option>)}
-                </select>
-                <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setAddEcolageStudent(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Annuler</button>
-              <button onClick={handleAddEcolage} disabled={saving||!addEcolageForm.montantDu}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2" style={{background:etabColor}}>
-                {saving ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : "Confirmer"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
 
       {/* ─── DELETE PAIEMENT CONFIRM ─── */}
