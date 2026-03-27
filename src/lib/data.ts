@@ -75,17 +75,13 @@ export const ETABLISSEMENTS: Record<Etablissement, { label: string; filieres: st
   },
 };
 
-// ─── Admin password ───────────────────────────────────────────────────────────
-
-export const ADMIN_PASSWORD = "Nina GSI";
-
 // ─── Default users (only admin by default) ───────────────────────────────────
 
 export const DEFAULT_USERS: User[] = [
   {
     id: "admin-1",
     username: "admin",
-    password: "Nina GSI",
+    password: "", // Handled on server for security
     nom: "Administrateur",
     prenom: "GSI",
     role: "admin",

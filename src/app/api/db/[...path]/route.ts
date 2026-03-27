@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 const API_BASE = "https://groupegsi.mg/rtmggmg/api/db";
-
-// Internal secret to ensure only our frontend calls this proxy
-const INTERNAL_SECRET = "GSI_INTERNAL_PROTECTION_2025";
+const SESSION_COOKIE = "gsi_secure_session";
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join("/");
   const url = `${API_BASE}/${path}`;
 
+  // SECURE CHECK: Validate session cookie
+  const session = cookies().get(SESSION_COOKIE);
+  if (!session) {
+    console.error("Unauthorized proxy access: No session found");
+    return NextResponse.json({ error: "Login required" }, { status: 401 });
+  }
+
   const headers = new Headers();
   headers.set("Accept", "application/json");
   headers.set("Content-Type", "application/json");
-
-  // Check if it's an internal request
-  const secret = req.headers.get("x-gsi-internal-secret");
-  if (secret !== INTERNAL_SECRET) {
-    console.error("Unauthorized proxy access attempt");
-    return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
-  }
 
   const options: RequestInit = {
     method: req.method,

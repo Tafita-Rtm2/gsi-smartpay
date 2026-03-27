@@ -1,6 +1,6 @@
 // We now use our local proxy to hide the real database URL and add a layer of security
+// All authentication is now handled via secure HTTP-only cookies on the server
 export const API_BASE = "/api/db";
-const INTERNAL_SECRET = "GSI_INTERNAL_PROTECTION_2025";
 
 export interface DBStudent {
   id?: string;
@@ -72,8 +72,7 @@ async function apiGet<T>(collection: string): Promise<T[]> {
       method: "GET",
       headers: {
         "Accept": "application/json",
-        "Content-Type": "application/json",
-        "x-gsi-internal-secret": INTERNAL_SECRET
+        "Content-Type": "application/json"
       },
       cache: "no-store",
     });
@@ -93,8 +92,7 @@ async function apiPost<T>(collection: string, body: object): Promise<T | null> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json",
-        "x-gsi-internal-secret": INTERNAL_SECRET
+        "Accept": "application/json"
       },
       body: JSON.stringify(body),
     });
@@ -113,8 +111,7 @@ async function apiPatch(collection: string, id: string, body: object): Promise<b
     const res = await fetch(`${API_BASE}/${collection}/${id}`, {
       method: "PATCH",
       headers: {
-        "Content-Type": "application/json",
-        "x-gsi-internal-secret": INTERNAL_SECRET
+        "Content-Type": "application/json"
       },
       body: JSON.stringify(body),
     });
@@ -166,8 +163,7 @@ async function apiDelete(collection: string, id: string): Promise<boolean> {
     const res = await fetch(`${API_BASE}/${collection}/${id}`, {
       method: "DELETE",
       headers: {
-        "Content-Type": "application/json",
-        "x-gsi-internal-secret": INTERNAL_SECRET
+        "Content-Type": "application/json"
       },
     });
     return res.ok;

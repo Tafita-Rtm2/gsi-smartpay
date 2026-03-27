@@ -78,19 +78,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   };
 
-  const login = (username: string, password: string, etablissement: Etablissement) => {
+  const login = async (username: string, password: string, etablissement: Etablissement) => {
     const user = appState.users.find(u => u.username === username && u.password === password);
     if (!user) return { ok: false, error: "Identifiant ou mot de passe incorrect" };
     if (!user.actif) return { ok: false, error: "Ce compte est desactive" };
     if (user.role !== "admin" && user.etablissement !== etablissement) {
       return { ok: false, error: `Ce compte n'appartient pas a ${etablissement}` };
     }
+
+    // Server-side session creation
+    try {
+      await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user }),
+      });
+    } catch (e) {
+      console.error("Session creation error:", e);
+    }
+
     setCurrentUser(user);
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     return { ok: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
     setCurrentUser(null);
     localStorage.removeItem(SESSION_KEY);
   };

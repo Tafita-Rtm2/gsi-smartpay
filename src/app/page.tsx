@@ -31,20 +31,41 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     await new Promise(r => setTimeout(r, 500));
-    const result = login(username, password, etab);
+    const result = await login(username, password, etab);
     setLoading(false);
     if (result.ok) router.push("/dashboard");
     else setError(result.error || "Erreur de connexion");
   };
 
-  const handleAdminAccess = () => {
-    if (adminPwd === ADMIN_PASSWORD) {
-      setShowAdminModal(false);
-      setAdminPwd("");
-      router.push("/admin");
-    } else {
-      setAdminError("Mot de passe incorrect");
+  const handleAdminAccess = async () => {
+    setLoading(true);
+    setAdminError("");
+    try {
+      const res = await fetch("/api/auth/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPwd }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        // Also create a session for admin
+        const adminUser = { id: "admin-1", role: "admin", etablissement: "analakely" };
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user: adminUser }),
+        });
+
+        setShowAdminModal(false);
+        setAdminPwd("");
+        router.push("/admin");
+      } else {
+        setAdminError(data.error || "Mot de passe incorrect");
+      }
+    } catch (e) {
+      setAdminError("Erreur de connexion au serveur");
     }
+    setLoading(false);
   };
 
   const etabInfo = ETABLISSEMENTS[etab];
