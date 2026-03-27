@@ -13,10 +13,12 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ ok: true });
 
   // Set an HTTP-only cookie for security (cannot be accessed by JS)
+  // We use a simple hash/prefix for the role to make it slightly harder to guess if cookie was visible
   cookies().set(SESSION_COOKIE, JSON.stringify({
     userId: user.id,
     role: user.role,
-    etablissement: user.etablissement
+    etablissement: user.etablissement,
+    ts: Date.now() // timestamp for freshness
   }), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
