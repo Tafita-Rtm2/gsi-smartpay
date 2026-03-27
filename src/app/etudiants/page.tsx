@@ -28,6 +28,20 @@ type FilterTab = "tous" | "paye" | "impaye" | "en_attente";
 
 export default function EtudiantsPage() {
   const { currentUser, appState, setProgramFee } = useAuth();
+
+  const normalizeString = (str: string) => {
+    return str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove accents
+      .replace(/&/g, "et")
+      .replace(/hote(l+)erie/g, "hotellerie") // normalize hotellerie spelling
+      .replace(/voyage(s?)/g, "voyage") // normalize voyage(s)
+      .replace(/[^a-z0-9]/g, " ") // remove special chars
+      .replace(/\s+/g, " ") // remove double spaces
+      .trim();
+  };
+
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
   const [allPaiements, setAllPaiements] = useState<DBPaiement[]>([]);
@@ -88,8 +102,7 @@ export default function EtudiantsPage() {
     const q = search.toLowerCase().trim();
     const name = getStudentName(s).toLowerCase();
     const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
-    const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "et").replace(/\s+/g, " ").trim();
-    const ok2 = filiereFilter === "Toutes" || normalize(s.filiere||"") === normalize(filiereFilter);
+    const ok2 = filiereFilter === "Toutes" || normalizeString(s.filiere||"") === normalizeString(filiereFilter);
     const ec = getEcolage(s);
     const ok3 = statutTab === "tous" || (ec?.statut || "impaye") === statutTab;
     return ok1 && ok2 && ok3;
@@ -105,7 +118,7 @@ export default function EtudiantsPage() {
     let ec = getEcolage(s);
     // If no ecolage, try to auto-create from config
     if (!ec) {
-      const config = appState.programFees.find(p => p.campus === (s.campus?.toLowerCase() || "") && p.filiere === s.filiere);
+      const config = appState.programFees.find(p => p.campus === (s.campus?.toLowerCase() || "") && normalizeString(p.filiere) === normalizeString(s.filiere||""));
       const amount = config?.amount || 1500000;
       const { createEcolage } = await import("@/lib/api");
       const result = await createEcolage({
@@ -196,7 +209,7 @@ export default function EtudiantsPage() {
     const myEtab = currentUser.etablissement;
 
     for (const s of filtered) {
-      const config = appState.programFees.find(p => p.campus === myEtab && p.filiere === s.filiere);
+      const config = appState.programFees.find(p => p.campus === myEtab && normalizeString(p.filiere) === normalizeString(s.filiere||""));
       if (config && config.amount > 0) {
         const ec = getEcolage(s);
         if (ec) {
@@ -968,9 +981,14 @@ export default function EtudiantsPage() {
               })}
             </div>
 
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex gap-3">
+              <CheckCircle2 className="text-emerald-600 shrink-0" size={18} />
+              <p className="text-xs text-emerald-700 font-medium">Le montant défini ici sera le plafond à payer pour marquer un étudiant comme &quot;Payé&quot;. S&apos;il paie moins, il restera en attente ou impayé.</p>
+            </div>
+
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
               <AlertTriangle className="text-amber-600 shrink-0" size={18} />
-              <p className="text-xs text-amber-700">Appliquer la configuration créera automatiquement les écolages manquants pour tous les étudiants de ce campus selon leur filière.</p>
+              <p className="text-xs text-amber-700">Appliquer la configuration créera ou mettra à jour l&apos;écolage total de TOUS les étudiants affichés ci-dessous selon leur filière.</p>
             </div>
 
             <div className="flex gap-3 pt-2">
