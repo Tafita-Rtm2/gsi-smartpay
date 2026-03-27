@@ -11,7 +11,8 @@ import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS, Etablissement } from "@/lib/data";
 import {
   fetchStudents, fetchEcolages, fetchPaiements, createPaiement,
-  updateEcolage, updatePaiement, DBStudent, DBEcolage, DBPaiement,
+  updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
+  DBStudent, DBEcolage, DBPaiement,
   getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE
 } from "@/lib/api";
 import clsx from "clsx";
@@ -276,7 +277,8 @@ export default function EtudiantsPage() {
 
     const id = deleteEcolage.id || deleteEcolage._id || "";
     if (id) {
-      await fetch(`${API_BASE}/db/ecolage/${id}`, { method: "DELETE" }).catch(() => {});
+      const { deleteEcolage: apiDelEco, deletePaiement: apiDelPay } = await import("@/lib/api");
+      await apiDelEco(id);
 
       // Also delete all payments for this student to make them "impayé" (0 paid)
       const stId = deleteEcolage.etudiantId;
@@ -284,9 +286,7 @@ export default function EtudiantsPage() {
 
       for (const p of toDelete) {
         const pid = p.id || p._id;
-        if (pid) {
-          await fetch(`${API_BASE}/db/paiements/${pid}`, { method: "DELETE" }).catch(() => {});
-        }
+        if (pid) await apiDelPay(pid);
       }
     }
 
@@ -298,8 +298,9 @@ export default function EtudiantsPage() {
     setDeleting(true);
     const id = deletePaiement.id || deletePaiement._id || "";
     if (id) {
+      const { deletePaiement: apiDelPay } = await import("@/lib/api");
       // Delete from paiements collection
-      await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" }).catch(() => {});
+      await apiDelPay(id);
       // Update ecolage - subtract montant and recalculate status
       const ec = ecolages.find(e => e.etudiantId === deletePaiement.etudiantId);
       if (ec && (ec.id || ec._id)) {

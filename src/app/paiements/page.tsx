@@ -181,11 +181,10 @@ export default function PaiementsPage() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     setDeleting(true);
-    // Mark payment as deleted by patching first to make sure it exists
     const id = deleteConfirm.id || deleteConfirm._id || "";
     if (id) {
-      const { API_BASE } = await import("@/lib/api");
-      await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" }).catch(() => {});
+      const { deletePaiement } = await import("@/lib/api");
+      await deletePaiement(id);
     }
 
     // Reverse the ecolage payment

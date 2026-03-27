@@ -53,15 +53,16 @@ export default function AdminPage() {
     if (!confirm("ATTENTION : Voulez-vous vraiment supprimer TOUS les paiements et TOUS les écolages ? Cette action est irréversible et remettra tous les compteurs à 0.")) return;
     setResetting(true);
     try {
+      const { deletePaiement, deleteEcolage } = await import("@/lib/api");
       // Clear paiements
       for (const p of paiements) {
         const id = p.id || p._id;
-        if (id) await fetch(`${API_BASE}/db/paiements/${id}`, { method: "DELETE" });
+        if (id) await deletePaiement(id);
       }
       // Clear ecolages
       for (const e of ecolages) {
         const id = e.id || e._id;
-        if (id) await fetch(`${API_BASE}/db/ecolage/${id}`, { method: "DELETE" });
+        if (id) await deleteEcolage(id);
       }
       alert("Toutes les données financières ont été réinitialisées à 0.");
       await load();

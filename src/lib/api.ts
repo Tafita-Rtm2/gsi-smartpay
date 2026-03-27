@@ -1,4 +1,6 @@
-export const API_BASE = "https://groupegsi.mg/rtmggmg/api";
+// We now use our local proxy to hide the real database URL and add a layer of security
+export const API_BASE = "/api/db";
+const INTERNAL_SECRET = "GSI_INTERNAL_PROTECTION_2025";
 
 export interface DBStudent {
   id?: string;
@@ -66,9 +68,13 @@ function parseArray<T>(data: Record<string, unknown> | unknown[]): T[] {
 
 async function apiGet<T>(collection: string): Promise<T[]> {
   try {
-    const res = await fetch(`${API_BASE}/db/${collection}`, {
+    const res = await fetch(`${API_BASE}/${collection}`, {
       method: "GET",
-      headers: { "Accept": "application/json", "Content-Type": "application/json" },
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "x-gsi-internal-secret": INTERNAL_SECRET
+      },
       cache: "no-store",
     });
     if (!res.ok) return [];
@@ -83,9 +89,13 @@ async function apiGet<T>(collection: string): Promise<T[]> {
 
 async function apiPost<T>(collection: string, body: object): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}/db/${collection}`, {
+    const res = await fetch(`${API_BASE}/${collection}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "x-gsi-internal-secret": INTERNAL_SECRET
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;
@@ -100,9 +110,12 @@ async function apiPost<T>(collection: string, body: object): Promise<T | null> {
 
 async function apiPatch(collection: string, id: string, body: object): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/db/${collection}/${id}`, {
+    const res = await fetch(`${API_BASE}/${collection}/${id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-gsi-internal-secret": INTERNAL_SECRET
+      },
       body: JSON.stringify(body),
     });
     return res.ok;
@@ -138,6 +151,30 @@ export async function updateEcolage(id: string, data: Partial<DBEcolage>): Promi
 
 export async function updatePaiement(id: string, data: Partial<DBPaiement>): Promise<boolean> {
   return apiPatch("paiements", id, { ...data, updatedAt: new Date().toISOString() });
+}
+
+export async function deletePaiement(id: string): Promise<boolean> {
+  return apiDelete("paiements", id);
+}
+
+export async function deleteEcolage(id: string): Promise<boolean> {
+  return apiDelete("ecolage", id);
+}
+
+async function apiDelete(collection: string, id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/${collection}/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "x-gsi-internal-secret": INTERNAL_SECRET
+      },
+    });
+    return res.ok;
+  } catch (e) {
+    console.error(`apiDelete(${collection}/${id}):`, e);
+    return false;
+  }
 }
 
 export async function fetchPaiements(): Promise<DBPaiement[]> {
