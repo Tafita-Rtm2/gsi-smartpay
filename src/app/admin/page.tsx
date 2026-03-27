@@ -30,6 +30,7 @@ export default function AdminPage() {
   const [searchStudent, setSearchStudent] = useState("");
   const [searchPaiement, setSearchPaiement] = useState("");
   const [filterEtab, setFilterEtab] = useState<"tous" | Etablissement>("tous");
+  const [selectedStudent, setSelectedStudent] = useState<DBStudent | null>(null);
 
   const [form, setForm] = useState({
     username: "", password: "", nom: "", prenom: "",
@@ -100,7 +101,12 @@ export default function AdminPage() {
     const totalDu = etabEcolages.reduce((s, e) => s + e.montantDu, 0);
     const totalPaye = etabPaiements.reduce((s, p) => s + p.montant, 0);
     const users = appState.users.filter(u => u.etablissement === id && u.role !== "admin");
-    return { id, info, students: etabStudents.length, users: users.length, totalPaye, totalDu, taux: totalDu > 0 ? Math.round((totalPaye/totalDu)*100) : 0 };
+
+    // Recovery stats
+    const countPaye = etabEcolages.filter(e => e.statut === "paye").length;
+    const countImpaye = etabStudents.length - countPaye;
+
+    return { id, info, students: etabStudents.length, users: users.length, totalPaye, totalDu, taux: totalDu > 0 ? Math.round((totalPaye/totalDu)*100) : 0, countPaye, countImpaye };
   });
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -223,13 +229,19 @@ export default function AdminPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {stats.map(({ id, info, students: sc, users, totalPaye, totalDu, taux }) => (
+            {stats.map(({ id, info, students: sc, users, totalPaye, totalDu, taux, countPaye, countImpaye }) => (
               <div key={id} className="bg-white border border-slate-200 rounded-[1.5rem] p-6 shadow-sm hover:border-slate-300 transition-colors">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-4 h-12 rounded-full shadow-inner" style={{background:info.color}} />
-                  <div>
-                    <div className="text-slate-900 font-black text-base">{info.label}</div>
-                    <div className="text-slate-400 text-xs font-medium">{users} agent(s) · {sc} étudiant(s)</div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-4 h-12 rounded-full shadow-inner" style={{background:info.color}} />
+                    <div>
+                      <div className="text-slate-900 font-black text-base">{info.label}</div>
+                      <div className="text-slate-400 text-xs font-medium">{users} agent(s) · {sc} étudiant(s)</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-black text-emerald-600">{countPaye} Payés</div>
+                    <div className="text-xs font-black text-red-500">{countImpaye} Impayés</div>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -365,12 +377,20 @@ export default function AdminPage() {
       {/* ── ETUDIANTS ── */}
       {tab === "etudiants" && (
         <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-400">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="relative w-full max-w-lg">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
+            <div className="relative flex-1 w-full">
               <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text" placeholder="Chercher un étudiant par nom ou matricule..." value={searchStudent}
                 onChange={e => setSearchStudent(e.target.value)}
                 className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all" />
+            </div>
+            <div className="relative w-full sm:w-64">
+              <select value={filterEtab} onChange={e => setFilterEtab(e.target.value as "tous"|Etablissement)}
+                className="appearance-none w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                <option value="tous">Tous les campus</option>
+                {ETAB_LIST.map(([id]) => <option key={id} value={id}>{id.charAt(0).toUpperCase() + id.slice(1)}</option>)}
+              </select>
+              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
@@ -391,11 +411,13 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-slate-100">
                     {students.filter(s => {
                       const q = searchStudent.toLowerCase();
-                      return getStudentName(s).toLowerCase().includes(q) || (s.matricule||"").toLowerCase().includes(q);
+                      const matchSearch = getStudentName(s).toLowerCase().includes(q) || (s.matricule||"").toLowerCase().includes(q);
+                      const matchEtab = filterEtab === "tous" || (s.campus||"").toLowerCase().includes(filterEtab);
+                      return matchSearch && matchEtab;
                     }).map(s => {
                       const ec = ecolages.find(e => e.etudiantId === getStudentId(s));
                       return (
-                        <tr key={getStudentId(s)} className="hover:bg-slate-50 transition-colors">
+                        <tr key={getStudentId(s)} className="hover:bg-slate-50 transition-colors group">
                           <td className="px-6 py-4">
                             <div className="font-black text-slate-900">{getStudentName(s)}</div>
                             <div className="font-mono text-[10px] text-slate-400 mt-0.5">{s.matricule||"PAS DE MATRICULE"}</div>
@@ -411,10 +433,16 @@ export default function AdminPage() {
                             ) : <span className="text-slate-300 text-[10px] font-bold italic uppercase">Non défini</span>}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={clsx("text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg",
-                              ec?.statut==="paye"?"bg-emerald-100 text-emerald-700":ec?.statut==="en_attente"?"bg-amber-100 text-amber-700":"bg-red-100 text-red-700")}>
-                              {ec?.statut==="paye"?"Payé":ec?.statut==="en_attente"?"En attente":"Impayé"}
-                            </span>
+                            <div className="flex items-center justify-between">
+                              <span className={clsx("text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg",
+                                ec?.statut==="paye"?"bg-emerald-100 text-emerald-700":ec?.statut==="en_attente"?"bg-amber-100 text-amber-700":"bg-red-100 text-red-700")}>
+                                {ec?.statut==="paye"?"Payé":ec?.statut==="en_attente"?"En attente":"Impayé"}
+                              </span>
+                              <button onClick={() => setSelectedStudent(s)}
+                                className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-brand-600 transition-all">
+                                <Eye size={16} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -430,12 +458,20 @@ export default function AdminPage() {
       {/* ── PAIEMENTS ── */}
       {tab === "paiements" && (
         <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-400">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="relative w-full max-w-lg">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
+            <div className="relative flex-1 w-full">
               <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text" placeholder="Chercher un paiement par référence ou étudiant..." value={searchPaiement}
                 onChange={e => setSearchPaiement(e.target.value)}
                 className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all" />
+            </div>
+            <div className="relative w-full sm:w-64">
+              <select value={filterEtab} onChange={e => setFilterEtab(e.target.value as "tous"|Etablissement)}
+                className="appearance-none w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                <option value="tous">Tous les campus</option>
+                {ETAB_LIST.map(([id]) => <option key={id} value={id}>{id.charAt(0).toUpperCase() + id.slice(1)}</option>)}
+              </select>
+              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
@@ -461,15 +497,28 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-slate-100">
                     {paiements.filter(p => {
                       const q = searchPaiement.toLowerCase();
-                      return p.etudiantNom.toLowerCase().includes(q) || (p.reference||"").toLowerCase().includes(q);
+                      const matchSearch = p.etudiantNom.toLowerCase().includes(q) || (p.reference||"").toLowerCase().includes(q);
+                      const matchEtab = filterEtab === "tous" || (p.campus||"").toLowerCase().includes(filterEtab);
+                      return matchSearch && matchEtab;
                     }).map((p, i) => (
-                      <tr key={p.id||p._id||i} className="hover:bg-slate-50 transition-colors">
+                      <tr key={p.id||p._id||i} className="hover:bg-slate-50 transition-colors group">
                         <td className="px-6 py-4 font-mono text-[10px] font-black text-brand-600">{p.reference||"—"}</td>
                         <td className="px-6 py-4 font-black text-slate-900">{p.etudiantNom}</td>
                         <td className="px-6 py-4 font-black text-emerald-600">{formatMGA(p.montant)}</td>
                         <td className="px-6 py-4 text-xs font-bold text-slate-500">{p.date}</td>
                         <td className="px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-400">{p.campus}</td>
-                        <td className="px-6 py-4 text-xs font-bold text-slate-400">{p.agentNom}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-400">{p.agentNom}</span>
+                            <button onClick={() => {
+                              const st = students.find(s => getStudentId(s) === p.etudiantId);
+                              if(st) setSelectedStudent(st);
+                            }}
+                              className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-brand-600 transition-all">
+                              <Eye size={16} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -479,6 +528,75 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* ── STUDENT DETAIL MODAL (ADMIN) ── */}
+      {selectedStudent && (() => {
+        const ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
+        const pays = paiements.filter(p => p.etudiantId === getStudentId(selectedStudent)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+        return (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-[2rem] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-600 flex items-center justify-center text-white font-black text-xl shadow-lg">
+                    {getStudentName(selectedStudent).charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">{getStudentName(selectedStudent)}</h2>
+                    <p className="text-xs font-bold text-slate-400 font-mono">{selectedStudent.matricule}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedStudent(null)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white text-slate-400 transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Ecolage Total</div>
+                    <div className="text-lg font-black text-slate-900">{formatMGA(ec?.montantDu||0)}</div>
+                  </div>
+                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                    <div className="text-[10px] font-black text-emerald-600 uppercase mb-1">Total Encaissé</div>
+                    <div className="text-lg font-black text-emerald-700">{formatMGA(ec?.montantPaye||0)}</div>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-2xl border border-red-100">
+                    <div className="text-[10px] font-black text-red-600 uppercase mb-1">Reste à payer</div>
+                    <div className="text-lg font-black text-red-700">{formatMGA((ec?.montantDu||0)-(ec?.montantPaye||0))}</div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Historique des transactions</h3>
+                  {pays.length === 0 ? (
+                    <div className="py-12 text-center text-slate-300 italic text-sm">Aucun paiement trouvé</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pays.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-all">
+                          <div>
+                            <div className="text-sm font-black text-slate-900">{formatMGA(p.montant)}</div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{p.date} · {p.note || "Aucune note"}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] font-black text-brand-600 uppercase tracking-widest">{p.reference}</div>
+                            <div className="text-[10px] font-bold text-slate-300">PAR: {p.agentNom}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="p-6 bg-slate-50 border-t border-slate-100">
+                <button onClick={() => setSelectedStudent(null)} className="w-full py-4 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-100 transition-all">
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── CREATE USER MODAL ── */}
       {showCreateUser && (

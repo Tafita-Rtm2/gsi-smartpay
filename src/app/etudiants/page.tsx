@@ -62,9 +62,11 @@ export default function EtudiantsPage() {
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
   const [showConfig,      setShowConfig]      = useState(false);
+  const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
   const [deleteEcolage,   setDeleteEcolage]   = useState<DBEcolage | null>(null);
   const [deletePaiement,  setDeletePaiement]  = useState<DBPaiement | null>(null);
 
+  const [ecolageForm, setEcolageForm] = useState({ montantDu: "" });
   const [payForm, setPayForm] = useState({
     mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()),
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
@@ -139,6 +141,24 @@ export default function EtudiantsPage() {
     setPayStudent(s);
     setPayEcolage(ec || null);
     setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
+  };
+
+  const openEditEcolage = (ec: DBEcolage) => {
+    setEditEcolage(ec);
+    setEcolageForm({ montantDu: String(ec.montantDu) });
+  };
+
+  const handleSaveEcolage = async () => {
+    if (!editEcolage) return;
+    setSaving(true);
+    const newDu = Number(ecolageForm.montantDu);
+    const st: "paye"|"impaye"|"en_attente" =
+      editEcolage.montantPaye >= newDu ? "paye" : editEcolage.montantPaye > 0 ? "en_attente" : "impaye";
+
+    await updateEcolage(editEcolage.id || editEcolage._id || "", { montantDu: newDu, statut: st });
+    await load();
+    setSaving(false);
+    setEditEcolage(null);
   };
 
   const openEditPayment = (p: DBPaiement) => {
@@ -239,29 +259,34 @@ export default function EtudiantsPage() {
     setShowConfig(false);
   };
 
+  const handlePrint = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.add("active");
+      setTimeout(() => {
+        window.print();
+        el.classList.remove("active");
+      }, 100);
+    }
+  };
+
   const handleDeleteEcolage = async () => {
     if (!deleteEcolage) return;
     setDeleting(true);
 
-    // Delete associated payments to reset to 0 properly?
-    // User said "quand on suprime l'ecolage l'eleve est dans le place de impayer"
-    // Deleting the ecolage record means we lose track of the debt.
-    // If we want them to be "impayé", we should probably just reset the paid amount to 0
-    // OR delete the payments.
-
-    // Let's delete the ecolage record as requested by "supprimer"
     const id = deleteEcolage.id || deleteEcolage._id || "";
     if (id) {
       await fetch(`${API_BASE}/db/ecolage/${id}`, { method: "DELETE" }).catch(() => {});
 
       // Also delete all payments for this student to make them "impayé" (0 paid)
       const stId = deleteEcolage.etudiantId;
-      const studentPayments = (await (await fetch(`${API_BASE}/db/paiements`)).json()).documents || [];
-      const toDelete = studentPayments.filter((p: any) => p.etudiantId === stId);
+      const toDelete = allPaiements.filter(p => p.etudiantId === stId);
 
       for (const p of toDelete) {
         const pid = p.id || p._id;
-        await fetch(`${API_BASE}/db/paiements/${pid}`, { method: "DELETE" }).catch(() => {});
+        if (pid) {
+          await fetch(`${API_BASE}/db/paiements/${pid}`, { method: "DELETE" }).catch(() => {});
+        }
       }
     }
 
@@ -354,14 +379,7 @@ export default function EtudiantsPage() {
             <Download size={15} /> Exporter CSV
           </button>
           <button
-            onClick={() => {
-              const el = document.getElementById("print-all-students");
-              if (el) {
-                el.style.display = "block";
-                window.print();
-                setTimeout(() => { el.style.display = "none"; }, 1500);
-              }
-            }}
+            onClick={() => handlePrint("print-all-students")}
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
           >
             <Printer size={15} /> Imprimer liste
@@ -496,7 +514,7 @@ export default function EtudiantsPage() {
                             {/* Edit/Add ecolage */}
                             {ec ? (
                               <>
-                                <button onClick={() => openPayment(s)} title="Modifier / Payer"
+                                <button onClick={() => openEditEcolage(ec)} title="Modifier l'écolage total"
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all border border-transparent hover:border-amber-200">
                                   <Edit3 size={14} />
                                 </button>
@@ -558,7 +576,7 @@ export default function EtudiantsPage() {
                       </button>
                       {ec ? (
                         <>
-                          <button onClick={() => openPayment(s)}
+                          <button onClick={() => openEditEcolage(ec)}
                             className="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-50">
                             <Edit3 size={12} /> Modifier
                           </button>
@@ -652,8 +670,8 @@ export default function EtudiantsPage() {
                       <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Ecolage</span>
                         <div className="flex gap-2">
-                          {ec && ec.montantDu > 0 && (
-                            <button onClick={() => { openPayment(profileStudent); setProfileStudent(null); }}
+                          {ec && (
+                            <button onClick={() => { openEditEcolage(ec); setProfileStudent(null); }}
                               className="text-xs text-amber-600 flex items-center gap-0.5 hover:underline"><Edit3 size={11} /> Modifier</button>
                           )}
                           {ec && ec.montantDu > 0 && (
@@ -737,7 +755,7 @@ export default function EtudiantsPage() {
       {receiptPaiement && (
         <>
           {/* Print area - hidden normally, shown when printing */}
-          <div id="receipt-print-area" style={{position:"fixed",top:0,left:0,width:"100%",background:"white",zIndex:999999,padding:"20px",boxSizing:"border-box"}}>
+          <div id="receipt-print-area" className="only-print" style={{background:"white",padding:"20px",boxSizing:"border-box"}}>
             <div style={{fontFamily:"Arial,sans-serif",maxWidth:"400px",margin:"0 auto",padding:"20px"}}>
               <div style={{background:etabColor,color:"white",padding:"20px",borderRadius:"12px 12px 0 0"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
@@ -831,14 +849,7 @@ export default function EtudiantsPage() {
                   Fermer
                 </button>
                 <button
-                  onClick={() => {
-                    const el = document.getElementById("receipt-print-area");
-                    if (el) {
-                      el.style.display = "block";
-                      window.print();
-                      setTimeout(() => { el.style.display = "none"; }, 1500);
-                    }
-                  }}
+                  onClick={() => handlePrint("receipt-print-area")}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-colors"
                   style={{background:etabColor}}>
                   <Printer size={14} /> Imprimer / PDF
@@ -1004,6 +1015,46 @@ export default function EtudiantsPage() {
 
 
 
+      {/* ─── EDIT ECOLAGE MODAL ─── */}
+      {editEcolage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">Modifier l&apos;écolage</h2>
+              <button onClick={() => setEditEcolage(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Étudiant</label>
+                <div className="text-sm font-bold text-slate-900">{editEcolage.etudiantNom}</div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Montant total dû (Ar)</label>
+                <input type="number" value={ecolageForm.montantDu} onChange={e=>setEcolageForm({montantDu:e.target.value})}
+                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              </div>
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-500">
+                <div className="flex justify-between mb-1">
+                  <span>Déjà payé :</span>
+                  <span className="font-bold text-emerald-600">{formatMGA(editEcolage.montantPaye)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Nouveau reste :</span>
+                  <span className="font-bold text-slate-900">{formatMGA(Math.max(0, Number(ecolageForm.montantDu) - editEcolage.montantPaye))}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setEditEcolage(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600">Annuler</button>
+              <button onClick={handleSaveEcolage} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50" style={{background:etabColor}}>
+                {saving ? "Sauvegarde..." : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── DELETE PAIEMENT CONFIRM ─── */}
       {deletePaiement && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1030,7 +1081,7 @@ export default function EtudiantsPage() {
       )}
 
       {/* ─── PRINT ALL AREA ─── */}
-      <div id="print-all-students" style={{display:"none"}}>
+      <div id="print-all-students" className="only-print">
         <div style={{fontFamily:"Arial,sans-serif",padding:"30px",background:"white"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px",paddingBottom:"15px",borderBottom:`3px solid ${etabColor}`}}>
             <div>
@@ -1082,16 +1133,16 @@ export default function EtudiantsPage() {
             </tbody>
           </table>
 
-          <div style={{marginTop:"30px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"15px"}}>
-            <div style={{border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
+          <div style={{marginTop:"30px",display:"flex",justifyContent:"space-between",gap:"15px"}}>
+            <div style={{flex:1,border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
               <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>ETUDIANTS</div>
               <div style={{fontSize:"20px",fontWeight:"bold",color:"#1e293b"}}>{filtered.length}</div>
             </div>
-            <div style={{border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
+            <div style={{flex:1,border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
               <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>TOTAL PAYE</div>
               <div style={{fontSize:"20px",fontWeight:"bold",color:"#059669"}}>{formatMGA(filtered.reduce((sum,s)=>sum+(getEcolage(s)?.montantPaye||0),0))}</div>
             </div>
-            <div style={{border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
+            <div style={{flex:1,border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",textAlign:"center"}}>
               <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>RESTE A PERCEVOIR</div>
               <div style={{fontSize:"20px",fontWeight:"bold",color:"#dc2626"}}>{formatMGA(filtered.reduce((sum,s)=>sum+Math.max(0,(getEcolage(s)?.montantDu||0)-(getEcolage(s)?.montantPaye||0)),0))}</div>
             </div>

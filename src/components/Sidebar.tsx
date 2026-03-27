@@ -14,6 +14,7 @@ const NAV = [
   { href: "/journal",    label: "Journal financier",icon: BookOpen },
   { href: "/rapports",   label: "Rapports",         icon: FileText },
   { href: "/recus",      label: "Recus",            icon: Receipt },
+  { href: "/admin",      label: "Admin",            icon: LayoutDashboard, adminOnly: true },
 ];
 
 export default function Sidebar() {
@@ -30,7 +31,7 @@ export default function Sidebar() {
 
   const NavLinks = () => (
     <nav className="flex flex-col gap-0.5 flex-1">
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {NAV.filter(item => !item.adminOnly || currentUser?.role === "admin").map(({ href, label, icon: Icon }) => {
         const active = pathname.startsWith(href);
         return (
           <Link key={href} href={href} onClick={() => setOpen(false)}

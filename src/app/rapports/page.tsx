@@ -51,14 +51,29 @@ export default function RapportsPage() {
   const studentsPending = students.filter(s => { const ec=ecolages.find(e=>e.etudiantId===getStudentId(s)); return ec?.statut==="en_attente"; });
 
   // Aggregated data based on timescale
-  const aggregatedMap: Record<string, number> = {};
+  const aggregatedMap: Record<string, { inc: number; exp: number }> = {};
+
   paiements.forEach(p => {
     let key = "";
     if (timeScale === "jour") key = p.date || "";
     else if (timeScale === "mois") key = (p.date || "").slice(0, 7);
     else if (timeScale === "annee") key = (p.date || "").slice(0, 4);
+    if (key) {
+      if (!aggregatedMap[key]) aggregatedMap[key] = { inc: 0, exp: 0 };
+      aggregatedMap[key].inc += p.montant;
+    }
+  });
 
-    if (key) aggregatedMap[key] = (aggregatedMap[key] || 0) + p.montant;
+  myExpenses.forEach(e => {
+    let key = "";
+    const date = e.date || "";
+    if (timeScale === "jour") key = date;
+    else if (timeScale === "mois") key = date.slice(0, 7);
+    else if (timeScale === "annee") key = date.slice(0, 4);
+    if (key) {
+      if (!aggregatedMap[key]) aggregatedMap[key] = { inc: 0, exp: 0 };
+      aggregatedMap[key].exp += e.montant;
+    }
   });
 
   const chartData = Object.entries(aggregatedMap)
@@ -66,11 +81,11 @@ export default function RapportsPage() {
     .slice(-12) // Keep last 12 units
     .map(([k, v]) => {
       let label = k;
-      if (timeScale === "mois") {
+      if (timeScale === "mois" && k.length === 7) {
         const m = parseInt(k.slice(5)) - 1;
         label = MOIS_LABELS[m] + " " + k.slice(2, 4);
       }
-      return { key: k, label, montant: v };
+      return { key: k, label, montant: v.inc, depense: v.exp, net: v.inc - v.exp };
     });
 
   const maxMontant = Math.max(...chartData.map(m => m.montant), 1);
@@ -99,9 +114,11 @@ export default function RapportsPage() {
   const handlePrint = () => {
     const el = document.getElementById("print-report-area");
     if (el) {
-      el.style.display = "block";
-      window.print();
-      setTimeout(() => { el.style.display = "none"; }, 1500);
+      el.classList.add("active");
+      setTimeout(() => {
+        window.print();
+        el.classList.remove("active");
+      }, 100);
     }
   };
 
@@ -231,6 +248,42 @@ export default function RapportsPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Monthly Recap Table */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-slate-800">Recapitulatif mensuel ({timeScale})</h3>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Encaissements nets</div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left text-xs font-semibold text-slate-400 pb-2 pr-4">Periode</th>
+                    <th className="text-right text-xs font-semibold text-slate-400 pb-2">Recettes</th>
+                    <th className="text-right text-xs font-semibold text-slate-400 pb-2">Depenses</th>
+                    <th className="text-right text-xs font-semibold text-slate-400 pb-2">Net</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {chartData.slice().reverse().map(({key, label, montant, depense, net}) => (
+                    <tr key={key} className="hover:bg-slate-50">
+                      <td className="py-2.5 pr-4 text-slate-600 font-medium">{label}</td>
+                      <td className="py-2.5 text-right font-bold text-emerald-600">{formatMGA(montant)}</td>
+                      <td className="py-2.5 text-right font-bold text-red-600">{formatMGA(depense)}</td>
+                      <td className="py-2.5 text-right font-bold" style={{color:net>=0?"#059669":"#dc2626"}}>{formatMGA(net)}</td>
+                    </tr>
+                  ))}
+                  {chartData.length > 0 && (
+                    <tr className="bg-slate-50/50 font-bold border-t-2 border-slate-100">
+                      <td className="py-3 pr-4 text-slate-900 uppercase text-xs">Total Periode</td>
+                      <td className="py-3 text-right text-emerald-700">{formatMGA(chartData.reduce((s,c)=>s+c.montant,0))}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Expenses detail */}
@@ -505,7 +558,7 @@ export default function RapportsPage() {
       )}
 
       {/* Print area hidden on screen, shown when printing */}
-      <div id="print-report-area" style={{display:"none"}}>
+      <div id="print-report-area" className="only-print">
         <div style={{fontFamily:"Arial,sans-serif",padding:"20px",background:"white"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",paddingBottom:"12px",borderBottom:`3px solid ${etabColor}`}}>
             <div>
@@ -520,17 +573,61 @@ export default function RapportsPage() {
           </div>
 
           {/* Stats */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px",marginBottom:"20px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:"12px",marginBottom:"20px"}}>
             {[
               {label:"Total Recettes",value:formatMGA(totalEncaisse),color:"#059669"},
               {label:"Total Depenses",value:formatMGA(totalDepenses),color:"#dc2626"},
               {label:"Resultat Net",  value:formatMGA(resultatNet),  color:etabColor},
             ].map(({label,value,color})=>(
-              <div key={label} style={{border:"1px solid #e2e8f0",borderRadius:"8px",padding:"12px",textAlign:"center"}}>
+              <div key={label} style={{flex:1,border:"1px solid #e2e8f0",borderRadius:"8px",padding:"12px",textAlign:"center"}}>
                 <div style={{fontSize:"11px",color:"#64748b",marginBottom:"4px"}}>{label}</div>
                 <div style={{fontSize:"18px",fontWeight:"bold",color}}>{value}</div>
               </div>
             ))}
+          </div>
+
+          {/* Visual Chart in Print */}
+          <div style={{marginBottom:"20px",border:"1px solid #e2e8f0",padding:"15px",borderRadius:"12px"}}>
+            <div style={{fontSize:"11px",fontWeight:"bold",color:"#64748b",marginBottom:"12px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Evolution des encaissements ({timeScale})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+              {chartData.map(({key, label, montant, depense, net}) => (
+                <div key={key} style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                  <div style={{width:"60px",fontSize:"9px",fontWeight:"bold",color:"#475569"}}>{label}</div>
+                  <div style={{flex:1,height:"14px",background:"#f1f5f9",borderRadius:"4px",overflow:"hidden",position:"relative"}}>
+                    <div style={{height:"100%",background:etabColor,width:`${(montant/maxMontant)*100}%`}}></div>
+                  </div>
+                  <div style={{width:"80px",fontSize:"8px",fontWeight:"bold",color:etabColor,textAlign:"right"}}>
+                    <div>+{formatMGA(montant)}</div>
+                    <div style={{color:"#dc2626"}}>-{formatMGA(depense)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Recap Mensuel */}
+          <div style={{marginBottom:"20px"}}>
+            <div style={{fontSize:"13px",fontWeight:"bold",color:"#334155",marginBottom:"8px",textTransform:"uppercase"}}>Recapitulatif par {timeScale}</div>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:"11px"}}>
+              <thead>
+                <tr style={{background:etabColor+"22"}}>
+                  <th style={{border:"1px solid #e2e8f0",padding:"6px 8px",textAlign:"left",color:"#475569",fontWeight:"600"}}>Periode</th>
+                  <th style={{border:"1px solid #e2e8f0",padding:"6px 8px",textAlign:"right",color:"#475569",fontWeight:"600"}}>Recettes</th>
+                  <th style={{border:"1px solid #e2e8f0",padding:"6px 8px",textAlign:"right",color:"#475569",fontWeight:"600"}}>Depenses</th>
+                  <th style={{border:"1px solid #e2e8f0",padding:"6px 8px",textAlign:"right",color:"#475569",fontWeight:"600"}}>Resultat Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chartData.slice().reverse().map(({key, label, montant, depense, net}, i) => (
+                  <tr key={key} style={{background:i%2===0?"white":"#f8fafc"}}>
+                    <td style={{border:"1px solid #e2e8f0",padding:"5px 8px"}}>{label}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",textAlign:"right",fontWeight:"bold",color:"#059669"}}>{formatMGA(montant)}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",textAlign:"right",fontWeight:"bold",color:"#dc2626"}}>{formatMGA(depense)}</td>
+                    <td style={{border:"1px solid #e2e8f0",padding:"5px 8px",textAlign:"right",fontWeight:"bold",color:net>=0?"#059669":"#dc2626"}}>{formatMGA(net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Paiements */}

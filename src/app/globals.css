@@ -30,32 +30,66 @@ body {
 
   @page {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 15mm;
   }
 
-  /* Hide everything on the page */
-  body * {
-    visibility: hidden !important;
-  }
-
-  /* Only show the print area */
-  #receipt-print-area,
-  #receipt-print-area *,
-  #print-all-students,
-  #print-all-students *,
-  #print-report-area,
-  #print-report-area * {
-    visibility: visible !important;
-  }
-
-  #receipt-print-area,
-  #print-all-students,
-  #print-report-area {
-    position: fixed !important;
-    inset: 0 !important;
+  /* Basic print visibility */
+  body {
     background: white !important;
-    z-index: 999999 !important;
-    padding: 0 !important;
-    overflow: visible !important;
+  }
+
+  /* Elements to hide during print */
+  nav, aside, footer, .no-print,
+  button, input, select, .modal-backdrop {
+    display: none !important;
+  }
+
+  /* Wrapper to show only what we want */
+  .only-print {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Fix for overlapping in tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+  thead {
+    display: table-header-group !important;
+  }
+
+  /* Ensure text is black and background white */
+  body, .card {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .page-break {
+    page-break-after: always;
+  }
+}
+
+/* Screen-only styling for areas we only want on paper */
+@media screen {
+  .only-print {
+    display: none;
+  }
+}
+
+/* Specific ID visibility to prevent "blank page" if they were display:none */
+#receipt-print-area, #print-all-students, #print-report-area {
+  display: none;
+}
+@media print {
+  #receipt-print-area.active, #print-all-students.active, #print-report-area.active {
+    display: block !important;
   }
 }
