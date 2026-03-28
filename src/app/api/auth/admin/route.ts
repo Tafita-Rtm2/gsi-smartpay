@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // This is kept only on the server, never sent to the browser
-const ADMIN_PASSWORD = "Nina GSI";
+const ADMIN_PASSWORD = process.env.GSI_ADMIN_PASSWORD;
 
 export async function POST(req: NextRequest) {
   const { password } = await req.json();

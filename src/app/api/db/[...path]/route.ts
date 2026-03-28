@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const API_BASE = "https://groupegsi.mg/rtmggmg/api/db";
+const API_BASE = process.env.GSI_DATABASE_URL;
 const SESSION_COOKIE = "gsi_secure_session";
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
