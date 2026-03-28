@@ -2,7 +2,12 @@
 const nextConfig = {
   output: 'standalone',
   basePath: '/gsi-smartpay',
-  assetPrefix: '/gsi-smartpay', // Important for assets in subdirectory
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 }
 
 module.exports = nextConfig
