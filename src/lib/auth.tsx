@@ -23,8 +23,8 @@ interface AuthContextType {
   currentUser: User | null;
   isAdmin: boolean;
   appState: AppState;
-  login: (username: string, password: string, etablissement: Etablissement) => { ok: boolean; error?: string };
-  logout: () => void;
+  login: (username: string, password: string, etablissement: Etablissement) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => Promise<void>;
   // Admin user management
   createUser: (data: Omit<User, "id" | "createdAt" | "createdBy">) => void;
   updateUser: (id: string, data: Partial<User>) => void;

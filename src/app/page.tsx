@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GraduationCap, Eye, EyeOff, Lock, User, Shield } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { ETABLISSEMENTS, Etablissement, ADMIN_PASSWORD } from "@/lib/data";
+import { ETABLISSEMENTS, Etablissement } from "@/lib/data";
 import clsx from "clsx";
 
 const ETABS: { id: Etablissement; short: string }[] = [
