@@ -53,3 +53,26 @@
  GET /api/db/users 200 in 193ms
  GET /api/db/ecolage 200 in 200ms
  GET /api/db/ecolage 200 in 198ms
+ GET / 200 in 701ms
+ POST /api/auth/admin 200 in 68ms
+ POST /api/auth/session 200 in 32ms
+ GET /api/db/ecolage 200 in 1044ms
+ GET /api/db/ecolage 200 in 1363ms
+ GET /api/db/paiements 200 in 1368ms
+ GET /api/db/paiements 200 in 1460ms
+ GET /api/db/users 200 in 1590ms
+ GET /api/db/users 200 in 1485ms
+ GET /dashboard 200 in 465ms
+ GET /api/db/paiements 200 in 1436ms
+ GET /api/db/ecolage 200 in 1453ms
+ GET /api/db/ecolage 200 in 1446ms
+ GET /api/db/users 200 in 1530ms
+ GET /api/db/users 200 in 1502ms
+ GET /api/db/paiements 200 in 1512ms
+ GET /etudiants 200 in 138ms
+ GET /api/db/paiements 200 in 181ms
+ GET /api/db/users 200 in 191ms
+ GET /api/db/ecolage 200 in 207ms
+ GET /api/db/ecolage 200 in 207ms
+ GET /api/db/paiements 200 in 213ms
+ GET /api/db/users 200 in 220ms
