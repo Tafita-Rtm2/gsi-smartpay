@@ -9,18 +9,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-      - run: npm install
-      - run: npm run build
+          node-version: 20 # On utilise la version 20 pour correspondre à ton cPanel
+          cache: 'npm'
+
+      - name: Installation des dépendances
+        run: npm install
+
+      - name: Build de l'application
+        run: npm run build
+
+      # ÉTAPE CRUCIALE : Préparer le dossier final avant l'upload
+      # On déplace les fichiers static et public dans standalone pour un ZIP complet
+      - name: Organisation des fichiers
+        run: |
+          mkdir -p deploy/
+          cp -r .next/standalone/. deploy/
+          cp -r .next/static deploy/.next/static
+          cp -r public deploy/public
+          cp package.json deploy/
+          cp next.config.js deploy/
+
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: gsi-smartpay-build
-          path: |
-            .next/standalone
-            .next/static
-            public
-            package.json
-            next.config.js
+          path: deploy/
+          include-hidden-files: true # Indispensable pour le dossier .next caché
