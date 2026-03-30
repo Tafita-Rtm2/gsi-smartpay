@@ -2,12 +2,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw, Edit3, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchPaiements, fetchEcolages, createEcolage, DBPaiement, DBEcolage, getStudentId, formatMGA } from "@/lib/api";
+import { fetchPaiements, DBPaiement, DBExpense, formatMGA } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 
 const CATEGORIES = ["Toutes", "Charges", "Materiel", "RH", "Autre"];
-
-import { Expense } from "@/lib/data";
 
 export default function JournalPage() {
   const { myExpenses, addExpense, updateExpense, deleteExpense, currentUser } = useAuth();
@@ -16,7 +14,7 @@ export default function JournalPage() {
   const [tab, setTab] = useState<"recettes" | "depenses">("recettes");
   const [catFilter, setCatFilter] = useState("Toutes");
   const [showModal, setShowModal] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editingExpense, setEditingExpense] = useState<DBExpense | null>(null);
   const [form, setForm] = useState({ libelle: "", categorie: "Charges", montant: "", date: new Date().toISOString().split("T")[0] });
 
   const etabInfo = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
@@ -37,7 +35,6 @@ export default function JournalPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Only paiements from the real DB are recettes — NOT mock data
   const totalRecettes = paiements.reduce((s, p) => s + p.montant, 0);
   const totalDepenses = myExpenses.reduce((s, e) => s + e.montant, 0);
   const solde = totalRecettes - totalDepenses;
@@ -49,7 +46,8 @@ export default function JournalPage() {
   const handleAddExpense = () => {
     if (!form.libelle || !form.montant) return;
     if (editingExpense) {
-      updateExpense(editingExpense.id, {
+      const id = editingExpense.id || editingExpense._id || "";
+      updateExpense(id, {
         libelle: form.libelle,
         categorie: form.categorie,
         montant: Number(form.montant),
@@ -198,26 +196,29 @@ export default function JournalPage() {
                   ))}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {filteredExpenses.map(e => (
-                    <tr key={e.id} className="hover:bg-red-50/20">
-                      <td className="px-4 py-3 text-xs text-slate-500">{e.date}</td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{e.libelle}</td>
-                      <td className="px-4 py-3"><span className="bg-red-50 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">{e.categorie}</span></td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{e.agentNom}</td>
-                      <td className="px-4 py-3 font-bold text-red-700">{formatMGA(e.montant)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => {
-                            setEditingExpense(e);
-                            setForm({ libelle: e.libelle, categorie: e.categorie, montant: String(e.montant), date: e.date });
-                            setShowModal(true);
-                          }} className="text-slate-400 hover:text-blue-600 transition-colors"><Edit3 size={14} /></button>
-                          <button onClick={() => { if (confirm("Supprimer cette dépense ?")) deleteExpense(e.id); }}
-                            className="text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredExpenses.map(e => {
+                    const id = e.id || e._id || "";
+                    return (
+                      <tr key={id} className="hover:bg-red-50/20">
+                        <td className="px-4 py-3 text-xs text-slate-500">{e.date}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{e.libelle}</td>
+                        <td className="px-4 py-3"><span className="bg-red-50 text-red-600 text-xs font-medium px-2 py-0.5 rounded-full">{e.categorie}</span></td>
+                        <td className="px-4 py-3 text-xs text-slate-500">{e.agentNom}</td>
+                        <td className="px-4 py-3 font-bold text-red-700">{formatMGA(e.montant)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => {
+                              setEditingExpense(e);
+                              setForm({ libelle: e.libelle, categorie: e.categorie, montant: String(e.montant), date: e.date });
+                              setShowModal(true);
+                            }} className="text-slate-400 hover:text-blue-600 transition-colors"><Edit3 size={14} /></button>
+                            <button onClick={() => { if (confirm("Supprimer cette dépense ?")) deleteExpense(id); }}
+                              className="text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 {filteredExpenses.length > 0 && (
                   <tfoot className="bg-red-50 border-t-2 border-red-100">
@@ -230,24 +231,27 @@ export default function JournalPage() {
               </table>
             </div>
             <div className="md:hidden divide-y divide-slate-100">
-              {filteredExpenses.map(e => (
-                <div key={e.id} className="p-4 flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="font-medium text-slate-800 text-sm">{e.libelle}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{e.categorie} · {e.date}</div>
-                    <div className="flex gap-4 mt-2">
-                      <button onClick={() => {
-                        setEditingExpense(e);
-                        setForm({ libelle: e.libelle, categorie: e.categorie, montant: String(e.montant), date: e.date });
-                        setShowModal(true);
-                      }} className="text-xs text-blue-600 font-medium">Modifier</button>
-                      <button onClick={() => { if (confirm("Supprimer ?")) deleteExpense(e.id); }}
-                        className="text-xs text-red-600 font-medium">Supprimer</button>
+              {filteredExpenses.map(e => {
+                const id = e.id || e._id || "";
+                return (
+                  <div key={id} className="p-4 flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="font-medium text-slate-800 text-sm">{e.libelle}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{e.categorie} · {e.date}</div>
+                      <div className="flex gap-4 mt-2">
+                        <button onClick={() => {
+                          setEditingExpense(e);
+                          setForm({ libelle: e.libelle, categorie: e.categorie, montant: String(e.montant), date: e.date });
+                          setShowModal(true);
+                        }} className="text-xs text-blue-600 font-medium">Modifier</button>
+                        <button onClick={() => { if (confirm("Supprimer ?")) deleteExpense(id); }}
+                          className="text-xs text-red-600 font-medium">Supprimer</button>
+                      </div>
                     </div>
+                    <span className="font-bold text-red-700 text-sm">{formatMGA(e.montant)}</span>
                   </div>
-                  <span className="font-bold text-red-700 text-sm">{formatMGA(e.montant)}</span>
-                </div>
-              ))}
+                );
+              })}
               {filteredExpenses.length === 0 && <div className="py-8 text-center text-slate-400 text-sm">Aucune depense</div>}
             </div>
           </div>

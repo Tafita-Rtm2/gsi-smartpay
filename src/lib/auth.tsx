@@ -1,12 +1,12 @@
 "use client";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { User, Etablissement, generateId } from "@/lib/data";
 import {
-  User, DEFAULT_USERS, Etablissement, generateId,
-  Expense,
-} from "@/lib/data";
+  fetchStaff, createStaff, updateStaff, deleteStaff,
+  fetchExpenses, createExpense, updateExpense, deleteExpense,
+  fetchFees, saveFee, DBExpense, DBFee, DBStudent
+} from "@/lib/api";
 
-// Auth only handles users, local expenses and program configurations
-// Students, payments, ecolages come directly from the real API
 interface ProgramFee {
   campus: Etablissement;
   filiere: string;
@@ -14,14 +14,15 @@ interface ProgramFee {
 }
 
 interface AppState {
-  users: User[];
-  expenses: Expense[]; // local expenses only
+  users: DBStudent[];
+  expenses: DBExpense[];
   programFees: ProgramFee[];
 }
 
 interface LoginResult {
   ok: boolean;
   error?: string;
+  user?: any;
 }
 
 interface AuthContextType {
@@ -30,81 +31,77 @@ interface AuthContextType {
   appState: AppState;
   login: (username: string, password: string, etablissement: Etablissement) => Promise<LoginResult>;
   logout: () => Promise<void>;
-  // Admin user management
-  createUser: (data: Omit<User, "id" | "createdAt" | "createdBy">) => void;
-  updateUser: (id: string, data: Partial<User>) => void;
-  deleteUser: (id: string) => void;
-  // Local expenses only
-  addExpense: (e: Omit<Expense, "id">) => void;
-  updateExpense: (id: string, data: Partial<Expense>) => void;
-  deleteExpense: (id: string) => void;
-  myExpenses: Expense[];
+  refreshState: () => Promise<void>;
+  // User management (Staff)
+  createUser: (data: Omit<User, "id" | "createdAt" | "createdBy">) => Promise<void>;
+  updateUser: (id: string, data: Partial<User>) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  // Expenses management
+  addExpense: (e: Omit<DBExpense, "id" | "_id">) => Promise<void>;
+  updateExpense: (id: string, data: Partial<DBExpense>) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  myExpenses: DBExpense[];
   // Program Fees management
-  setProgramFee: (campus: Etablissement, filiere: string, amount: number) => void;
+  setProgramFee: (campus: Etablissement, filiere: string, amount: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const STORAGE_KEY = "gsi_users_v3"; // only users now
 const SESSION_KEY = "gsi_session_v3";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [appState, setAppState] = useState<AppState>({
-    users: DEFAULT_USERS,
+    users: [],
     expenses: [],
     programFees: [],
   });
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setAppState({
-          users: parsed.users || DEFAULT_USERS,
-          expenses: parsed.expenses || [],
-          programFees: parsed.programFees || [],
-        });
-        // Restore session
-        const session = localStorage.getItem(SESSION_KEY);
-        if (session) {
-          const user = JSON.parse(session) as User;
-          const found = (parsed.users || DEFAULT_USERS).find((u: User) => u.id === user.id && u.actif);
-          if (found) setCurrentUser(found);
-        }
-      } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ users: DEFAULT_USERS, expenses: [] }));
-      }
-    } catch {}
+  const refreshState = useCallback(async () => {
+    const [staff, expenses, fees] = await Promise.all([
+      fetchStaff(),
+      fetchExpenses(),
+      fetchFees()
+    ]);
+    setAppState({
+      users: staff,
+      expenses: expenses,
+      programFees: fees.map(f => ({ campus: f.campus as Etablissement, filiere: f.filiere, amount: f.amount }))
+    });
   }, []);
 
-  const persist = (state: AppState) => {
-    setAppState(state);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  };
+  useEffect(() => {
+    // 1. Tenter de restaurer la session locale
+    const session = localStorage.getItem(SESSION_KEY);
+    if (session) {
+      try {
+        const user = JSON.parse(session) as User;
+        setCurrentUser(user);
+      } catch {}
+    }
+    // 2. Charger les données initiales depuis la DB
+    refreshState();
+  }, [refreshState]);
 
   const login = async (username: string, password: string, etablissement: Etablissement): Promise<LoginResult> => {
-    const user = appState.users.find(u => u.username === username && u.password === password);
-    if (!user) return { ok: false, error: "Identifiant ou mot de passe incorrect" };
-    if (!user.actif) return { ok: false, error: "Ce compte est desactive" };
-    if (user.role !== "admin" && user.etablissement !== etablissement) {
-      return { ok: false, error: `Ce compte n'appartient pas a ${etablissement}` };
-    }
-
-    // Server-side session creation
     try {
-      await fetch("/gsi-smartpay/api/auth/session/", {
+      const res = await fetch("/gsi-smartpay/api/auth/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user }),
+        body: JSON.stringify({ username, password, etablissement }),
       });
-    } catch (e) {
-      console.error("Session creation error:", e);
-    }
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error || "Erreur de connexion" };
 
-    setCurrentUser(user);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    return { ok: true };
+      const user = data.user;
+      setCurrentUser(user);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+
+      // Re-charger les données spécifiques à l'utilisateur
+      await refreshState();
+      return { ok: true, user };
+    } catch (e) {
+      return { ok: false, error: "Impossible de contacter le serveur d'authentification" };
+    }
   };
 
   const logout = async () => {
@@ -115,59 +112,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(SESSION_KEY);
   };
 
-  const createUser = (data: Omit<User, "id" | "createdAt" | "createdBy">) => {
-    const newUser: User = {
+  const createUser = async (data: any) => {
+    const res = await createStaff({
       ...data,
-      id: generateId(),
-      createdAt: new Date().toISOString().split("T")[0],
-      createdBy: currentUser?.id || "admin",
-    };
-    persist({ ...appState, users: [...appState.users, newUser] });
+      actif: true,
+      createdBy: currentUser?.id || "admin"
+    });
+    if (res) await refreshState();
   };
 
-  const updateUser = (id: string, data: Partial<User>) => {
-    persist({ ...appState, users: appState.users.map(u => u.id === id ? { ...u, ...data } : u) });
+  const updateUserProfile = async (id: string, data: any) => {
+    const ok = await updateStaff(id, data);
+    if (ok) await refreshState();
   };
 
-  const deleteUser = (id: string) => {
-    persist({ ...appState, users: appState.users.filter(u => u.id !== id) });
+  const deleteUserProfile = async (id: string) => {
+    const ok = await deleteStaff(id);
+    if (ok) await refreshState();
   };
 
-  const addExpense = (e: Omit<Expense, "id">) => {
-    const newE: Expense = { ...e, id: generateId() };
-    persist({ ...appState, expenses: [...appState.expenses, newE] });
+  const addExpenseToDb = async (e: any) => {
+    const res = await createExpense(e);
+    if (res) await refreshState();
   };
 
-  const updateExpense = (id: string, data: Partial<Expense>) => {
-    persist({ ...appState, expenses: appState.expenses.map(e => e.id === id ? { ...e, ...data } : e) });
+  const updateExpenseInDb = async (id: string, data: any) => {
+    const ok = await updateExpense(id, data);
+    if (ok) await refreshState();
   };
 
-  const deleteExpense = (id: string) => {
-    persist({ ...appState, expenses: appState.expenses.filter(e => e.id !== id) });
+  const deleteExpenseInDb = async (id: string) => {
+    const ok = await deleteExpense(id);
+    if (ok) await refreshState();
   };
 
-  const setProgramFee = (campus: Etablissement, filiere: string, amount: number) => {
-    const existing = appState.programFees.find(p => p.campus === campus && p.filiere === filiere);
-    let newList;
-    if (existing) {
-      newList = appState.programFees.map(p => (p.campus === campus && p.filiere === filiere) ? { ...p, amount } : p);
-    } else {
-      newList = [...appState.programFees, { campus, filiere, amount }];
-    }
-    persist({ ...appState, programFees: newList });
+  const setProgramFeeInDb = async (campus: Etablissement, filiere: string, amount: number) => {
+    const res = await saveFee({ campus, filiere, amount });
+    if (res) await refreshState();
   };
 
   const isAdmin = currentUser?.role === "admin";
   const myExpenses = isAdmin
     ? appState.expenses
-    : appState.expenses.filter(e => e.etablissement === currentUser?.etablissement);
+    : appState.expenses.filter(e => (e.etablissement || "").toLowerCase().includes((currentUser?.etablissement || "").toLowerCase()));
 
   return (
     <AuthContext.Provider value={{
-      currentUser, isAdmin, appState, login, logout,
-      createUser, updateUser, deleteUser,
-      addExpense, updateExpense, deleteExpense, myExpenses,
-      setProgramFee,
+      currentUser, isAdmin, appState, login, logout, refreshState,
+      createUser, updateUser: updateUserProfile, deleteUser: deleteUserProfile,
+      addExpense: addExpenseToDb, updateExpense: updateExpenseInDb, deleteExpense: deleteExpenseInDb, myExpenses,
+      setProgramFee: setProgramFeeInDb,
     }}>
       {children}
     </AuthContext.Provider>

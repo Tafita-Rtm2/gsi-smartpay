@@ -1,7 +1,6 @@
 // We now use our local proxy to hide the real database URL and add a layer of security
 // All authentication is now handled via secure HTTP-only cookies on the server
 // Note: We use a relative path to support deployment in subdirectories (cPanel)
-// Important: On ajoute un slash final si trailingSlash est true dans next.config.js
 export const API_BASE = "/gsi-smartpay/api/db/";
 
 export interface DBStudent {
@@ -21,6 +20,13 @@ export interface DBStudent {
   annee?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Account properties for staff
+  username?: string;
+  password?: string;
+  role?: string;
+  actif?: boolean;
+  createdBy?: string;
+  etablissement?: string;
 }
 
 export interface DBEcolage {
@@ -59,6 +65,26 @@ export interface DBPaiement {
   createdAt?: string;
 }
 
+export interface DBExpense {
+  id?: string;
+  _id?: string;
+  libelle: string;
+  categorie: string;
+  montant: number;
+  date: string;
+  etablissement: string;
+  agentId: string;
+  agentNom: string;
+}
+
+export interface DBFee {
+  id?: string;
+  _id?: string;
+  campus: string;
+  filiere: string;
+  amount: number;
+}
+
 function parseArray<T>(data: Record<string, unknown> | unknown[]): T[] {
   if (Array.isArray(data)) return data as T[];
   for (const key of ["data", "documents", "results", "items", "records", "list"]) {
@@ -70,17 +96,13 @@ function parseArray<T>(data: Record<string, unknown> | unknown[]): T[] {
 
 async function apiGet<T>(collection: string): Promise<T[]> {
   try {
-    const res = await fetch(`${API_BASE}/${collection}`, {
+    const res = await fetch(`${API_BASE}${collection}`, {
       method: "GET",
-      headers: {
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-      },
+      headers: { "Accept": "application/json", "Content-Type": "application/json" },
       cache: "no-store",
     });
     if (!res.ok) return [];
     const data = await res.json();
-    if (data?.error) return [];
     return parseArray<T>(data);
   } catch (e) {
     console.error(`apiGet(${collection}):`, e);
@@ -90,17 +112,13 @@ async function apiGet<T>(collection: string): Promise<T[]> {
 
 async function apiPost<T>(collection: string, body: object): Promise<T | null> {
   try {
-    const res = await fetch(`${API_BASE}/${collection}`, {
+    const res = await fetch(`${API_BASE}${collection}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;
     const data = await res.json();
-    if (data?.error) return null;
     return (data.document || data.data || data) as T;
   } catch (e) {
     console.error(`apiPost(${collection}):`, e);
@@ -110,11 +128,9 @@ async function apiPost<T>(collection: string, body: object): Promise<T | null> {
 
 async function apiPatch(collection: string, id: string, body: object): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/${collection}/${id}`, {
+    const res = await fetch(`${API_BASE}${collection}/${id}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     return res.ok;
@@ -124,9 +140,22 @@ async function apiPatch(collection: string, id: string, body: object): Promise<b
   }
 }
 
+async function apiDelete(collection: string, id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}${collection}/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
+    return res.ok;
+  } catch (e) {
+    console.error(`apiDelete(${collection}/${id}):`, e);
+    return false;
+  }
+}
+
+// -- ÉTUDIANTS --
 export async function fetchStudents(): Promise<DBStudent[]> {
   const all = await apiGet<DBStudent>("users");
-  // Deduplicate by id/_id to avoid showing same student multiple times
   const seen = new Set<string>();
   return all.filter(s => {
     const id = s.id || s._id || "";
@@ -136,6 +165,7 @@ export async function fetchStudents(): Promise<DBStudent[]> {
   });
 }
 
+// -- ECOLAGES & PAIEMENTS --
 export async function fetchEcolages(): Promise<DBEcolage[]> {
   return apiGet<DBEcolage>("ecolage");
 }
@@ -148,31 +178,8 @@ export async function updateEcolage(id: string, data: Partial<DBEcolage>): Promi
   return apiPatch("ecolage", id, { ...data, updatedAt: new Date().toISOString() });
 }
 
-export async function updatePaiement(id: string, data: Partial<DBPaiement>): Promise<boolean> {
-  return apiPatch("paiements", id, { ...data, updatedAt: new Date().toISOString() });
-}
-
-export async function deletePaiement(id: string): Promise<boolean> {
-  return apiDelete("paiements", id);
-}
-
 export async function deleteEcolage(id: string): Promise<boolean> {
   return apiDelete("ecolage", id);
-}
-
-async function apiDelete(collection: string, id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/${collection}/${id}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json"
-      },
-    });
-    return res.ok;
-  } catch (e) {
-    console.error(`apiDelete(${collection}/${id}):`, e);
-    return false;
-  }
 }
 
 export async function fetchPaiements(): Promise<DBPaiement[]> {
@@ -185,19 +192,74 @@ export async function createPaiement(data: Omit<DBPaiement, "id" | "_id">): Prom
   return apiPost<DBPaiement>("paiements", { ...data, reference, createdAt: new Date().toISOString() });
 }
 
-export function getStudentId(s: DBStudent): string {
-  return s.id || s._id || "";
+export async function updatePaiement(id: string, data: Partial<DBPaiement>): Promise<boolean> {
+  return apiPatch("paiements", id, { ...data, updatedAt: new Date().toISOString() });
 }
 
+export async function deletePaiement(id: string): Promise<boolean> {
+  return apiDelete("paiements", id);
+}
+
+// -- STAFF (USERS) --
+export async function fetchStaff(): Promise<DBStudent[]> {
+  const all = await apiGet<DBStudent>("users");
+  return all.filter(u => u.role === "admin" || u.role === "comptable" || u.role === "agent");
+}
+
+export async function createStaff(data: Partial<DBStudent>): Promise<DBStudent | null> {
+  return apiPost<DBStudent>("users", { ...data, createdAt: new Date().toISOString() });
+}
+
+export async function updateStaff(id: string, data: Partial<DBStudent>): Promise<boolean> {
+  return apiPatch("users", id, { ...data, updatedAt: new Date().toISOString() });
+}
+
+export async function deleteStaff(id: string): Promise<boolean> {
+  return apiDelete("users", id);
+}
+
+// -- DÉPENSES (EXPENSES) --
+export async function fetchExpenses(): Promise<DBExpense[]> {
+  return apiGet<DBExpense>("expenses");
+}
+
+export async function createExpense(data: Omit<DBExpense, "id" | "_id">): Promise<DBExpense | null> {
+  return apiPost<DBExpense>("expenses", { ...data });
+}
+
+export async function updateExpense(id: string, data: Partial<DBExpense>): Promise<boolean> {
+  return apiPatch("expenses", id, { ...data });
+}
+
+export async function deleteExpense(id: string): Promise<boolean> {
+  return apiDelete("expenses", id);
+}
+
+// -- CONFIGURATION ÉCOLAGES (FEES) --
+export async function fetchFees(): Promise<DBFee[]> {
+  return apiGet<DBFee>("fees");
+}
+
+export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | null> {
+  const all = await fetchFees();
+  const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere);
+  if (existing) {
+    const id = existing.id || existing._id || "";
+    await apiPatch("fees", id, data);
+    return { ...existing, ...data };
+  }
+  return apiPost<DBFee>("fees", { ...data });
+}
+
+// -- HELPERS --
+export function getStudentId(s: DBStudent): string { return s.id || s._id || ""; }
 export function getStudentName(s: DBStudent): string {
   if (s.fullName) return s.fullName;
   return `${s.prenom || ""} ${s.nom || ""}`.trim();
 }
-
 export function getStudentCampus(s: DBStudent): string {
   return (s.campus || "").toLowerCase();
 }
-
 export function formatMGA(amount: number): string {
   return new Intl.NumberFormat("fr-MG").format(amount) + " Ar";
 }

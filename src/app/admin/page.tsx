@@ -88,8 +88,11 @@ export default function AdminPage() {
 
   const filteredUsers = appState.users.filter(u => {
     const q = searchUser.toLowerCase();
-    const matchSearch = u.username.toLowerCase().includes(q) || u.nom.toLowerCase().includes(q) || u.prenom.toLowerCase().includes(q);
-    const matchEtab = filterEtab === "tous" || u.etablissement === filterEtab;
+    const uname = u.username || "";
+    const unom = u.nom || "";
+    const uprenom = u.prenom || "";
+    const matchSearch = uname.toLowerCase().includes(q) || unom.toLowerCase().includes(q) || uprenom.toLowerCase().includes(q);
+    const matchEtab = filterEtab === "tous" || (u.campus || u.etablissement) === filterEtab;
     return matchSearch && matchEtab;
   });
 
@@ -101,7 +104,7 @@ export default function AdminPage() {
     const etabPaiements = paiements.filter(p => etabIds.has(p.etudiantId));
     const totalDu = etabEcolages.reduce((s, e) => s + e.montantDu, 0);
     const totalPaye = etabPaiements.reduce((s, p) => s + p.montant, 0);
-    const users = appState.users.filter(u => u.etablissement === id && u.role !== "admin");
+    const users = appState.users.filter(u => (u.campus || u.etablissement) === id && u.role !== "admin");
 
     // Recovery stats
     const countPaye = etabEcolages.filter(e => e.statut === "paye").length;
@@ -300,76 +303,48 @@ export default function AdminPage() {
                   ))}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map(u => (
-                    <tr key={u.id} className={clsx("hover:bg-slate-50 transition-colors", !u.actif && "opacity-60")}>
-                      <td className="px-6 py-4 font-mono text-xs font-bold text-brand-600">{u.username}</td>
-                      <td className="px-6 py-4 font-bold text-slate-900">{u.prenom} {u.nom}</td>
-                      <td className="px-6 py-4">
-                        <span className={clsx("text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider",
-                          u.role==="admin"?"bg-amber-100 text-amber-700":u.role==="comptable"?"bg-blue-100 text-blue-700":"bg-emerald-100 text-emerald-700")}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-[10px] px-2.5 py-1 rounded-lg text-white font-black uppercase tracking-wider shadow-sm" style={{background:ETABLISSEMENTS[u.etablissement].color}}>
-                          {u.etablissement}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {u.actif
-                          ? <span className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs"><CheckCircle2 size={14}/>Actif</span>
-                          : <span className="flex items-center gap-1.5 text-red-400 font-bold text-xs"><XCircle size={14}/>Désactivé</span>}
-                      </td>
-                      <td className="px-6 py-4">
-                        {u.role !== "admin" && (
-                          <div className="flex gap-2">
-                            <button onClick={() => updateUser(u.id, {actif:!u.actif})}
-                              className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
-                              {u.actif ? "Bloquer" : "Activer"}
-                            </button>
-                            <button onClick={() => { if(confirm("Supprimer définitivement ce compte ?")) deleteUser(u.id); }}
-                              className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredUsers.map(u => {
+                    const id = getStudentId(u);
+                    const campus = (u.campus || u.etablissement || "analakely") as Etablissement;
+                    return (
+                      <tr key={id} className={clsx("hover:bg-slate-50 transition-colors", !u.actif && "opacity-60")}>
+                        <td className="px-6 py-4 font-mono text-xs font-bold text-brand-600">{u.username}</td>
+                        <td className="px-6 py-4 font-bold text-slate-900">{u.prenom} {u.nom}</td>
+                        <td className="px-6 py-4">
+                          <span className={clsx("text-[10px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider",
+                            u.role==="admin"?"bg-amber-100 text-amber-700":u.role==="comptable"?"bg-blue-100 text-blue-700":"bg-emerald-100 text-emerald-700")}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] px-2.5 py-1 rounded-lg text-white font-black uppercase tracking-wider shadow-sm" style={{background:ETABLISSEMENTS[campus]?.color || "#ccc"}}>
+                            {campus}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {u.actif
+                            ? <span className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs"><CheckCircle2 size={14}/>Actif</span>
+                            : <span className="flex items-center gap-1.5 text-red-400 font-bold text-xs"><XCircle size={14}/>Désactivé</span>}
+                        </td>
+                        <td className="px-6 py-4">
+                          {u.role !== "admin" && (
+                            <div className="flex gap-2">
+                              <button onClick={() => updateUser(id, {actif:!u.actif})}
+                                className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all">
+                                {u.actif ? "Bloquer" : "Activer"}
+                              </button>
+                              <button onClick={() => { if(confirm("Supprimer définitivement ce compte ?")) deleteUser(id); }}
+                                className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-all">
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            </div>
-            <div className="md:hidden divide-y divide-slate-100">
-              {filteredUsers.map(u => (
-                <div key={u.id} className={clsx("p-5 space-y-3", !u.actif && "opacity-60")}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-slate-900 font-black">{u.prenom} {u.nom}</div>
-                      <div className="font-mono text-xs font-bold text-brand-600 mt-0.5">{u.username}</div>
-                    </div>
-                    <span className={clsx("text-[10px] font-black uppercase px-2 py-0.5 rounded-lg",
-                      u.role==="admin"?"bg-amber-100 text-amber-700":u.role==="comptable"?"bg-blue-100 text-blue-700":"bg-emerald-100 text-emerald-700")}>
-                      {u.role}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] px-2.5 py-1 rounded-lg text-white font-black uppercase tracking-wider" style={{background:ETABLISSEMENTS[u.etablissement].color}}>{u.etablissement}</span>
-                    {u.actif ? <span className="text-emerald-600 text-[10px] font-black">ACTIF</span> : <span className="text-red-400 text-[10px] font-black">BLOQUÉ</span>}
-                  </div>
-                  {u.role !== "admin" && (
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={() => updateUser(u.id,{actif:!u.actif})}
-                        className="flex-1 py-2 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                        {u.actif ? "Désactiver" : "Activer"}
-                      </button>
-                      <button onClick={() => { if(confirm("Supprimer ?")) deleteUser(u.id); }}
-                        className="px-4 py-2 rounded-xl bg-red-50 text-red-600">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
         </div>
