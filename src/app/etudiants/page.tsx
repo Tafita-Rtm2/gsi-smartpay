@@ -64,8 +64,8 @@ export default function EtudiantsPage() {
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
   const [showConfig,      setShowConfig]      = useState(false);
   const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
-  const [deleteEcolage,   setDeleteEcolage]   = useState<DBEcolage | null>(null);
-  const [deletePaiement,  setDeletePaiement]  = useState<DBPaiement | null>(null);
+  const [deleteEcolageObj, setDeleteEcolageObj] = useState<DBEcolage | null>(null);
+  const [deletePaiementObj, setDeletePaiementObj] = useState<DBPaiement | null>(null);
 
   const [ecolageForm, setEcolageForm] = useState({ montantDu: "" });
   const [payForm, setPayForm] = useState({
@@ -272,16 +272,16 @@ export default function EtudiantsPage() {
   };
 
   const handleDeleteEcolage = async () => {
-    if (!deleteEcolage) return;
+    if (!deleteEcolageObj) return;
     setDeleting(true);
 
-    const id = deleteEcolage.id || deleteEcolage._id || "";
+    const id = deleteEcolageObj.id || deleteEcolageObj._id || "";
     if (id) {
       const { deleteEcolage: apiDelEco, deletePaiement: apiDelPay } = await import("@/lib/api");
       await apiDelEco(id);
 
       // Also delete all payments for this student to make them "impayé" (0 paid)
-      const stId = deleteEcolage.etudiantId;
+      const stId = deleteEcolageObj.etudiantId;
       const toDelete = allPaiements.filter(p => p.etudiantId === stId);
 
       for (const p of toDelete) {
@@ -290,21 +290,20 @@ export default function EtudiantsPage() {
       }
     }
 
-    await load(); setDeleting(false); setDeleteEcolage(null);
+    await load(); setDeleting(false); setDeleteEcolageObj(null);
   };
 
   const handleDeletePaiement = async () => {
-    if (!deletePaiement) return;
+    if (!deletePaiementObj) return;
     setDeleting(true);
-    const id = deletePaiement.id || deletePaiement._id || "";
+    const id = deletePaiementObj.id || deletePaiementObj._id || "";
     if (id) {
-      const { deletePaiement: apiDelPay } = await import("@/lib/api");
       // Delete from paiements collection
-      await apiDelPay(id);
+      await deletePaiement(id);
       // Update ecolage - subtract montant and recalculate status
-      const ec = ecolages.find(e => e.etudiantId === deletePaiement.etudiantId);
+      const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
       if (ec && (ec.id || ec._id)) {
-        const newPaye = Math.max(0, ec.montantPaye - deletePaiement.montant);
+        const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
         // If nothing left paid -> impaye, if partial -> en_attente, if full -> paye
         const st: "paye"|"impaye"|"en_attente" =
           newPaye <= 0 ? "impaye" :
@@ -314,7 +313,7 @@ export default function EtudiantsPage() {
     }
     await load();
     setDeleting(false);
-    setDeletePaiement(null);
+    setDeletePaiementObj(null);
   };
 
   const Avatar = ({ s, size = 36 }: { s: DBStudent; size?: number }) => {
@@ -519,7 +518,7 @@ export default function EtudiantsPage() {
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all border border-transparent hover:border-amber-200">
                                   <Edit3 size={14} />
                                 </button>
-                                <button onClick={() => setDeleteEcolage(ec)} title="Supprimer l'écolage"
+                                <button onClick={() => setDeleteEcolageObj(ec)} title="Supprimer l'écolage"
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-200">
                                   <Trash2 size={14} />
                                 </button>
@@ -581,7 +580,7 @@ export default function EtudiantsPage() {
                             className="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-50">
                             <Edit3 size={12} /> Modifier
                           </button>
-                          <button onClick={() => setDeleteEcolage(ec)}
+                          <button onClick={() => setDeleteEcolageObj(ec)}
                             className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50">
                             <Trash2 size={12} /> Supprimer
                           </button>
@@ -676,7 +675,7 @@ export default function EtudiantsPage() {
                               className="text-xs text-amber-600 flex items-center gap-0.5 hover:underline"><Edit3 size={11} /> Modifier</button>
                           )}
                           {ec && ec.montantDu > 0 && (
-                            <button onClick={() => { setDeleteEcolage(ec); setProfileStudent(null); }}
+                            <button onClick={() => { setDeleteEcolageObj(ec); setProfileStudent(null); }}
                               className="text-xs text-red-500 flex items-center gap-0.5 hover:underline"><Trash2 size={11} /> Supprimer</button>
                           )}
                         </div>
@@ -691,7 +690,7 @@ export default function EtudiantsPage() {
                             <div key={label}><div className={`text-sm font-bold ${color}`}>{value}</div><div className="text-xs text-slate-400 mt-0.5">{label}</div></div>
                           ))}
                         </div>
-                      ) : <div className="px-4 py-3 text-center text-slate-400 text-xs">Aucun ecolage defini</div>}
+                      ) : <div className="px-4 py-3 text-center text-slate-400 text-xs">Aucun ecolage fini</div>}
                     </div>
 
                     <div className="flex gap-3">
@@ -733,7 +732,7 @@ export default function EtudiantsPage() {
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-brand-600 hover:bg-brand-100 transition-all" title="Voir recu">
                             <Printer size={13} />
                           </button>
-                          <button onClick={e => { e.stopPropagation(); setDeletePaiement(p); }}
+                          <button onClick={e => { e.stopPropagation(); setDeletePaiementObj(p); }}
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all" title="Supprimer">
                             <Trash2 size={13} />
                           </button>
@@ -876,7 +875,7 @@ export default function EtudiantsPage() {
                 <div className="text-xs text-slate-400 truncate">{payStudent.matricule} · {payStudent.filiere}</div>
                 {payEcolage && payEcolage.montantDu > 0
                   ? <div className="text-xs text-red-500 mt-0.5">Reste: {formatMGA(payEcolage.montantDu - payEcolage.montantPaye)}</div>
-                  : <div className="text-xs text-amber-600 mt-0.5">Aucun ecolage defini</div>}
+                  : <div className="text-xs text-amber-600 mt-0.5">Aucun ecolage fini</div>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -938,7 +937,7 @@ export default function EtudiantsPage() {
 
 
       {/* ─── DELETE ECOLAGE CONFIRM ─── */}
-      {deleteEcolage && (
+      {deleteEcolageObj && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 mx-auto"><AlertTriangle size={26} className="text-red-600" /></div>
@@ -947,11 +946,11 @@ export default function EtudiantsPage() {
               <p className="text-sm text-slate-500">L&apos;ecolage et TOUS les paiements associes de cet etudiant seront supprimes.</p>
             </div>
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center space-y-0.5">
-              <div className="font-bold text-slate-900">{deleteEcolage.etudiantNom}</div>
-              <div className="text-sm text-red-700">{formatMGA(deleteEcolage.montantDu)}</div>
+              <div className="font-bold text-slate-900">{deleteEcolageObj.etudiantNom}</div>
+              <div className="text-sm text-red-700">{formatMGA(deleteEcolageObj.montantDu)}</div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteEcolage(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Non, annuler</button>
+              <button onClick={() => setDeleteEcolageObj(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Non, annuler</button>
               <button onClick={handleDeleteEcolage} disabled={deleting}
                 className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold disabled:opacity-60 flex items-center justify-center gap-2">
                 {deleting ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : <><Trash2 size={15} />Supprimer</>}
@@ -1057,7 +1056,7 @@ export default function EtudiantsPage() {
       )}
 
       {/* ─── DELETE PAIEMENT CONFIRM ─── */}
-      {deletePaiement && (
+      {deletePaiementObj && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 mx-auto"><AlertTriangle size={26} className="text-red-600" /></div>
@@ -1066,12 +1065,12 @@ export default function EtudiantsPage() {
               <p className="text-sm text-slate-500">Le montant sera deduit du total paye.</p>
             </div>
             <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center space-y-0.5">
-              <div className="font-bold text-slate-900">{deletePaiement.etudiantNom}</div>
-              <div className="text-lg font-bold text-red-700">{formatMGA(deletePaiement.montant)}</div>
-              <div className="text-xs text-slate-400">{deletePaiement.date} · {deletePaiement.note||""}</div>
+              <div className="font-bold text-slate-900">{deletePaiementObj.etudiantNom}</div>
+              <div className="text-lg font-bold text-red-700">{formatMGA(deletePaiementObj.montant)}</div>
+              <div className="text-xs text-slate-400">{deletePaiementObj.date} · {deletePaiementObj.note||""}</div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setDeletePaiement(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Non, annuler</button>
+              <button onClick={() => setDeletePaiementObj(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Non, annuler</button>
               <button onClick={handleDeletePaiement} disabled={deleting}
                 className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold disabled:opacity-60 flex items-center justify-center gap-2">
                 {deleting ? <><span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />...</> : <><Trash2 size={15} />Supprimer</>}

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Edit3 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
+import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 
 const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
@@ -183,18 +183,18 @@ export default function PaiementsPage() {
     setDeleting(true);
     const id = deleteConfirm.id || deleteConfirm._id || "";
     if (id) {
-      const { deletePaiement } = await import("@/lib/api");
       await deletePaiement(id);
+
+      // Reverse the ecolage payment
+      const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
+      if (ec && (ec.id || ec._id)) {
+        const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
+        const newStatut: "paye"|"impaye"|"en_attente" =
+          newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+        await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
+      }
     }
 
-    // Reverse the ecolage payment
-    const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
-    if (ec && (ec.id || ec._id)) {
-      const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
-      const newStatut: "paye"|"impaye"|"en_attente" =
-        newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
-      await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
-    }
     await load();
     setDeleting(false);
     setDeleteConfirm(null);
