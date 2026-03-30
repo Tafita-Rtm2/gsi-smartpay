@@ -1,52 +1,44 @@
-# Guide de Déploiement cPanel (Mode Standalone)
+# Guide de Déploiement cPanel (Mode Standalone) - SPÉCIAL 503
 
-Ce projet est configuré pour le déploiement sur cPanel via un serveur Node.js. Voici les étapes exactes après avoir généré votre build (par exemple sur GitHub ou localement).
+Si vous obtenez une **erreur 503**, c'est que le processus Node.js s'arrête immédiatement après son lancement. Voici comment corriger cela.
 
-## 1. Préparation du Build
+## 1. Vérifications IMPÉRATIVES avant le build
 
-Exécutez la commande suivante (déjà configurée dans `next.config.js`) :
-```bash
-npm run build
-```
-
-Cela va créer un dossier `.next/standalone`.
+1.  **Version de Node.js** : Votre cPanel **DOIT** utiliser **Node.js 18.17.0** ou supérieur. Si c'est en version 14 ou 16, le serveur ne démarrera jamais (503).
+2.  **Configuration Next.js** : J'ai mis à jour `next.config.js` avec `unoptimized: true` pour les images. Cela évite d'utiliser la librairie `sharp` qui fait souvent planter les hébergements mutualisés.
 
 ## 2. Structure finale sur le serveur
 
-Pour que le site fonctionne dans le dossier `/gsi-smartpay` de votre hébergement, vous devez organiser vos fichiers exactement comme suit à la racine de votre application Node.js sur cPanel :
+Pour que le site fonctionne dans le dossier `/gsi-smartpay`, organisez vos fichiers exactement ainsi dans votre dossier d'application (ex: `/home/user/nodeapp/`) :
 
 ```text
-/public_html/gsi-smartpay/ (ou votre dossier d'application)
+/home/user/nodeapp/ (le dossier configuré dans Setup Node.js App)
 ├── server.js               <-- (Copié depuis .next/standalone/server.js)
-├── package.json            <-- (Le package.json d'origine)
-├── .env                    <-- (Vos variables d'environnement de production)
-├── public/                 <-- (Copié depuis la racine du projet)
-│   └── favicon.ico, etc.
+├── package.json            <-- (Copié depuis la racine de votre projet)
+├── .env                    <-- (Facultatif si variables saisies dans cPanel)
+├── public/                 <-- (Copié depuis la racine de votre projet)
+│   └── (contient vos images, logos, etc.)
 └── .next/
-    └── static/             <-- (Copié depuis .next/static)
+    ├── static/             <-- (Copié depuis .next/static)
+    └── (le reste du build standalone si nécessaire)
 ```
 
-### IMPORTANT : Copie des fichiers statiques
-Next.js en mode `standalone` ne copie pas automatiquement les fichiers statiques. Vous **DEVEZ** copier manuellement :
-1. Le contenu de `.next/standalone` vers la racine de votre application.
-2. Le dossier `public/` (à la racine du projet) vers la racine de votre application.
-3. Le dossier `.next/static/` vers `.next/static/` dans votre dossier d'application.
+**ATTENTION** : Le dossier `node_modules` à la racine de votre dossier d'application **doit être celui présent dans `.next/standalone/node_modules`** pour que toutes les dépendances compilées soient présentes.
 
-## 3. Configuration de l'Application Node.js sur cPanel
+## 3. Configuration dans l'interface cPanel "Setup Node.js App"
 
-1. **Application root** : `/public_html/gsi-smartpay`
-2. **Application URL** : `votre-domaine.com/gsi-smartpay`
-3. **Application startup file** : `server.js`
-4. **Environment variables** (À configurer dans l'interface cPanel "Setup Node.js App") :
-   - `NODE_ENV`: `production`
-   - `PORT`: (laissez cPanel gérer automatiquement)
-   - `GSI_DATABASE_URL`: (votre URL de base de données)
-   - `GSI_ADMIN_PASSWORD`: `Nina GSI`
+1.  **Application root** : `/home/user/nodeapp`
+2.  **Application URL** : `votre-domaine.com/gsi-smartpay`
+3.  **Application startup file** : `server.js`
+4.  **Environment variables** (CRITIQUE pour éviter le 503) :
+    -   `NODE_ENV`: `production`
+    -   `GSI_DATABASE_URL`: (votre URL de base de données)
+    -   `GSI_ADMIN_PASSWORD`: `Nina GSI`
 
-*Note : Le fichier `server.js` de Next.js ne lit pas automatiquement le fichier `.env`. Il est donc préférable de saisir ces variables directement dans l'interface cPanel.*
+## 4. Comment voir l'erreur exacte si vous avez encore un 503 ?
 
-## 4. Troubleshooting (Erreurs fréquentes)
+cPanel cache souvent les erreurs dans un fichier de log. Regardez dans votre dossier d'application :
+1.  Cherchez un fichier nommé `stderr.log` ou `error_log`.
+2.  Si le fichier existe, ouvrez-le. Il vous dira exactement pourquoi il crash (ex: "Module not found", "Unexpected token", "Node version mismatch").
 
-- **Erreur 503** : Vérifiez que `server.js` est bien à la racine et que vous avez installé les dépendances si nécessaire (bien qu'en mode standalone, le dossier `node_modules` est déjà inclus dans `.next/standalone/node_modules`).
-- **Images/CSS manquants** : Assurez-vous d'avoir bien copié le dossier `public` et `.next/static` comme indiqué à l'étape 2.
-- **Chemins de l'API** : Le site utilise `/gsi-smartpay/api/db`. Si vous changez le dossier sur cPanel, assurez-vous que `basePath` dans `next.config.js` correspond.
+**Conseil final** : Après avoir téléchargé et placé vos fichiers, cliquez sur **"RESTART"** dans l'interface cPanel Node.js pour forcer le rechargement.
