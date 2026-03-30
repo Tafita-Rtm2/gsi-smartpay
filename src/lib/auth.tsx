@@ -19,11 +19,16 @@ interface AppState {
   programFees: ProgramFee[];
 }
 
+interface LoginResult {
+  ok: boolean;
+  error?: string;
+}
+
 interface AuthContextType {
   currentUser: User | null;
   isAdmin: boolean;
   appState: AppState;
-  login: (username: string, password: string, etablissement: Etablissement) => Promise<{ ok: boolean; error?: string }>;
+  login: (username: string, password: string, etablissement: Etablissement) => Promise<LoginResult>;
   logout: () => Promise<void>;
   // Admin user management
   createUser: (data: Omit<User, "id" | "createdAt" | "createdBy">) => void;
@@ -78,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   };
 
-  const login = async (username: string, password: string, etablissement: Etablissement) => {
+  const login = async (username: string, password: string, etablissement: Etablissement): Promise<LoginResult> => {
     const user = appState.users.find(u => u.username === username && u.password === password);
     if (!user) return { ok: false, error: "Identifiant ou mot de passe incorrect" };
     if (!user.actif) return { ok: false, error: "Ce compte est desactive" };
