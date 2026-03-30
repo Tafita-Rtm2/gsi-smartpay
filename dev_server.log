@@ -11,75 +11,45 @@
  ⚠ Port 3006 is in use, trying 3007 instead.
  ⚠ Port 3007 is in use, trying 3008 instead.
  ⚠ Port 3008 is in use, trying 3009 instead.
+ ⚠ Port 3009 is in use, trying 3010 instead.
   ▲ Next.js 14.2.5
-  - Local:        http://localhost:3009
+  - Local:        http://localhost:3010
   - Environments: .env
 
  ✓ Starting...
- ✓ Ready in 2.8s
+ ✓ Ready in 4.9s
  ○ Compiling / ...
- ✓ Compiled / in 6.3s (489 modules)
- GET / 200 in 7033ms
- ✓ Compiled in 716ms (251 modules)
- GET /? 200 in 37ms
- GET / 200 in 44ms
- GET / 200 in 35ms
- GET / 200 in 34ms
- GET / 200 in 30ms
- ○ Compiling /api/auth/admin ...
- ✓ Compiled /api/auth/admin in 533ms (268 modules)
- POST /api/auth/admin 200 in 621ms
- ✓ Compiled /api/auth/session in 248ms (275 modules)
- POST /api/auth/session 200 in 326ms
- ○ Compiling /admin ...
- ✓ Compiled /admin in 883ms (599 modules)
- ✓ Compiled /api/db/[...path] in 148ms (326 modules)
- GET /api/db/paiements 200 in 1154ms
- GET /api/db/paiements 200 in 1157ms
- GET /api/db/users 200 in 1172ms
- GET /api/db/ecolage 200 in 1552ms
- GET /api/db/users 200 in 1564ms
- GET /api/db/ecolage 200 in 1575ms
- GET / 200 in 123ms
- POST /api/auth/admin 200 in 24ms
- POST /api/auth/session 200 in 15ms
- GET /api/db/paiements 200 in 494ms
- GET /api/db/paiements 200 in 509ms
- GET /api/db/ecolage 200 in 516ms
- GET /api/db/ecolage 200 in 526ms
- GET /api/db/users 200 in 549ms
- GET /api/db/users 200 in 561ms
- GET / 200 in 33ms
- POST /api/auth/admin 200 in 14ms
- POST /api/auth/session 200 in 11ms
- GET /api/db/ecolage 200 in 394ms
- GET /api/db/users 200 in 408ms
- GET /api/db/ecolage 200 in 404ms
- GET /api/db/paiements 200 in 418ms
- GET /api/db/paiements 200 in 426ms
- GET /api/db/users 200 in 448ms
+ ✓ Compiled / in 4.3s (489 modules)
+ ✓ Compiled in 768ms (251 modules)
+ GET / 200 in 5186ms
+ GET / 200 in 62ms
+ GET / 200 in 69ms
+ ✓ Compiled /api/auth/admin in 337ms (268 modules)
+ POST /api/auth/admin 200 in 428ms
+ ✓ Compiled /api/auth/session in 106ms (275 modules)
+ POST /api/auth/session 200 in 222ms
+ ✓ Compiled /admin in 439ms (599 modules)
+ ✓ Compiled /api/db/[...path] in 130ms (326 modules)
+ GET /api/db/ecolage 200 in 3120ms
+ GET /api/db/paiements 200 in 3130ms
+ GET /api/db/paiements 200 in 3143ms
+ GET /api/db/users 200 in 3156ms
+ GET /api/db/users 200 in 3158ms
+ GET /api/db/ecolage 200 in 3166ms
  ○ Compiling /dashboard ...
- ✓ Compiled /dashboard in 4.5s (1681 modules)
- GET /dashboard 200 in 5162ms
- GET /api/db/users 200 in 421ms
- GET /api/db/ecolage 200 in 435ms
- GET /api/db/users 200 in 446ms
- GET /api/db/paiements 200 in 458ms
- GET /api/db/paiements 200 in 465ms
- GET /api/db/ecolage 200 in 482ms
- ○ Compiling /etudiants ...
- ✓ Compiled /etudiants in 720ms (1714 modules)
- GET /api/db/ecolage 200 in 417ms
- GET /api/db/paiements 200 in 433ms
- GET /api/db/paiements 200 in 451ms
+ ✓ Compiled /dashboard in 2.5s (1681 modules)
+ GET /dashboard 200 in 3002ms
  GET /api/db/users 200 in 460ms
- GET /api/db/ecolage 200 in 462ms
- GET /api/db/users 200 in 473ms
- ○ Compiling /rapports ...
- ✓ Compiled /rapports in 581ms (1727 modules)
- GET /api/db/ecolage 200 in 412ms
- GET /api/db/paiements 200 in 423ms
- GET /api/db/paiements 200 in 427ms
- GET /api/db/users 200 in 439ms
- GET /api/db/ecolage 200 in 446ms
- GET /api/db/users 200 in 452ms
+ GET /api/db/paiements 200 in 467ms
+ GET /api/db/ecolage 200 in 486ms
+ GET /api/db/paiements 200 in 479ms
+ GET /api/db/ecolage 200 in 482ms
+ GET /api/db/users 200 in 505ms
+ ✓ Compiled /etudiants in 319ms (1714 modules)
+ GET /etudiants 200 in 600ms
+ GET /api/db/paiements 200 in 173ms
+ GET /api/db/paiements 200 in 178ms
+ GET /api/db/users 200 in 195ms
+ GET /api/db/users 200 in 193ms
+ GET /api/db/ecolage 200 in 200ms
+ GET /api/db/ecolage 200 in 198ms
