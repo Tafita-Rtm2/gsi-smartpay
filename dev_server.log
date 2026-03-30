@@ -1,0 +1,100 @@
+
+> gsi-smartpay@1.0.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+ ⚠ Port 3001 is in use, trying 3002 instead.
+ ⚠ Port 3002 is in use, trying 3003 instead.
+ ⚠ Port 3003 is in use, trying 3004 instead.
+ ⚠ Port 3004 is in use, trying 3005 instead.
+ ⚠ Port 3005 is in use, trying 3006 instead.
+ ⚠ Port 3006 is in use, trying 3007 instead.
+ ⚠ Port 3007 is in use, trying 3008 instead.
+ ⚠ Port 3008 is in use, trying 3009 instead.
+ ⚠ Port 3009 is in use, trying 3010 instead.
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3010
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 4.9s
+ ○ Compiling / ...
+ ✓ Compiled / in 4.3s (489 modules)
+ ✓ Compiled in 768ms (251 modules)
+ GET / 200 in 5186ms
+ GET / 200 in 62ms
+ GET / 200 in 69ms
+ ✓ Compiled /api/auth/admin in 337ms (268 modules)
+ POST /api/auth/admin 200 in 428ms
+ ✓ Compiled /api/auth/session in 106ms (275 modules)
+ POST /api/auth/session 200 in 222ms
+ ✓ Compiled /admin in 439ms (599 modules)
+ ✓ Compiled /api/db/[...path] in 130ms (326 modules)
+ GET /api/db/ecolage 200 in 3120ms
+ GET /api/db/paiements 200 in 3130ms
+ GET /api/db/paiements 200 in 3143ms
+ GET /api/db/users 200 in 3156ms
+ GET /api/db/users 200 in 3158ms
+ GET /api/db/ecolage 200 in 3166ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 2.5s (1681 modules)
+ GET /dashboard 200 in 3002ms
+ GET /api/db/users 200 in 460ms
+ GET /api/db/paiements 200 in 467ms
+ GET /api/db/ecolage 200 in 486ms
+ GET /api/db/paiements 200 in 479ms
+ GET /api/db/ecolage 200 in 482ms
+ GET /api/db/users 200 in 505ms
+ ✓ Compiled /etudiants in 319ms (1714 modules)
+ GET /etudiants 200 in 600ms
+ GET /api/db/paiements 200 in 173ms
+ GET /api/db/paiements 200 in 178ms
+ GET /api/db/users 200 in 195ms
+ GET /api/db/users 200 in 193ms
+ GET /api/db/ecolage 200 in 200ms
+ GET /api/db/ecolage 200 in 198ms
+ GET / 200 in 701ms
+ POST /api/auth/admin 200 in 68ms
+ POST /api/auth/session 200 in 32ms
+ GET /api/db/ecolage 200 in 1044ms
+ GET /api/db/ecolage 200 in 1363ms
+ GET /api/db/paiements 200 in 1368ms
+ GET /api/db/paiements 200 in 1460ms
+ GET /api/db/users 200 in 1590ms
+ GET /api/db/users 200 in 1485ms
+ GET /dashboard 200 in 465ms
+ GET /api/db/paiements 200 in 1436ms
+ GET /api/db/ecolage 200 in 1453ms
+ GET /api/db/ecolage 200 in 1446ms
+ GET /api/db/users 200 in 1530ms
+ GET /api/db/users 200 in 1502ms
+ GET /api/db/paiements 200 in 1512ms
+ GET /etudiants 200 in 138ms
+ GET /api/db/paiements 200 in 181ms
+ GET /api/db/users 200 in 191ms
+ GET /api/db/ecolage 200 in 207ms
+ GET /api/db/ecolage 200 in 207ms
+ GET /api/db/paiements 200 in 213ms
+ GET /api/db/users 200 in 220ms
+ ⚠ Found a change in next.config.js. Restarting the server to apply the changes...
+ ⚠ Port 3000 is in use, trying 3001 instead.
+ ⚠ Port 3001 is in use, trying 3002 instead.
+ ⚠ Port 3002 is in use, trying 3003 instead.
+ ⚠ Port 3003 is in use, trying 3004 instead.
+ ⚠ Port 3004 is in use, trying 3005 instead.
+ ⚠ Port 3005 is in use, trying 3006 instead.
+ ⚠ Port 3006 is in use, trying 3007 instead.
+ ⚠ Port 3007 is in use, trying 3008 instead.
+ ⚠ Port 3008 is in use, trying 3009 instead.
+ ⚠ Port 3009 is in use, trying 3010 instead.
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3010
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 17.9s
+ocalhost:3008
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 18.8s
