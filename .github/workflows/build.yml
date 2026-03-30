@@ -13,7 +13,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20 # On utilise la version 20 pour correspondre à ton cPanel
+          node-version: 20
           cache: 'npm'
 
       - name: Installation des dépendances
@@ -22,14 +22,16 @@ jobs:
       - name: Build de l'application
         run: npm run build
 
-      # ÉTAPE CRUCIALE : Préparer le dossier final avant l'upload
-      # On déplace les fichiers static et public dans standalone pour un ZIP complet
       - name: Organisation des fichiers
         run: |
-          mkdir -p deploy/
+          mkdir -p deploy/.next
+          # Copie le coeur de l'application
           cp -r .next/standalone/. deploy/
+          # Copie les fichiers statiques (CSS/JS)
           cp -r .next/static deploy/.next/static
-          cp -r public deploy/public
+          # Copie le dossier public seulement s'il existe
+          if [ -d "public" ]; then cp -r public deploy/public; fi
+          # Copie les fichiers de config
           cp package.json deploy/
           cp next.config.js deploy/
 
@@ -38,4 +40,4 @@ jobs:
         with:
           name: gsi-smartpay-build
           path: deploy/
-          include-hidden-files: true # Indispensable pour le dossier .next caché
+          include-hidden-files: true
