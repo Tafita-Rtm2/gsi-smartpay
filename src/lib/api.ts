@@ -200,22 +200,21 @@ export async function deletePaiement(id: string): Promise<boolean> {
   return apiDelete("paiements", id);
 }
 
-// -- STAFF (USERS) --
+// -- STAFF (Dédié) --
 export async function fetchStaff(): Promise<DBStudent[]> {
-  const all = await apiGet<DBStudent>("users");
-  return all.filter(u => u.role === "admin" || u.role === "comptable" || u.role === "agent");
+  return apiGet<DBStudent>("staff");
 }
 
 export async function createStaff(data: Partial<DBStudent>): Promise<DBStudent | null> {
-  return apiPost<DBStudent>("users", { ...data, createdAt: new Date().toISOString() });
+  return apiPost<DBStudent>("staff", { ...data, createdAt: new Date().toISOString() });
 }
 
 export async function updateStaff(id: string, data: Partial<DBStudent>): Promise<boolean> {
-  return apiPatch("users", id, { ...data, updatedAt: new Date().toISOString() });
+  return apiPatch("staff", id, { ...data, updatedAt: new Date().toISOString() });
 }
 
 export async function deleteStaff(id: string): Promise<boolean> {
-  return apiDelete("users", id);
+  return apiDelete("staff", id);
 }
 
 // -- DÉPENSES (EXPENSES) --

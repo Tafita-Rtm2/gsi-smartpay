@@ -5,53 +5,45 @@ Cette méthode est la plus robuste pour cPanel car elle sépare le frontend stat
 ## 1. Préparation Locale
 
 1.  Assurez-vous que `next.config.js` contient `output: 'export'`.
-2.  Générez le build statique :
-    ```bash
-    npm run build
-    ```
+2.  Générez le build statique : `npm run build`
 3.  Cela va créer un dossier nommé `out/` à la racine de votre projet.
 
 ## 2. Structure des fichiers sur cPanel
 
-Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), placez les fichiers comme suit :
+Placez les fichiers comme suit dans votre dossier racine cPanel :
 
-1.  **Copiez tout le dossier `out/`** généré localement vers la racine de votre dossier cPanel.
-2.  **Copiez le fichier `server.js`** (Express) à la racine de votre dossier cPanel.
-3.  **Copiez le fichier `package.json`** à la racine.
-4.  **Créez un fichier `.env`** à la racine avec vos accès :
+1.  **out/** : Copiez tout le contenu de votre dossier `out/` local.
+2.  **server.js** : Copiez le fichier `server.js` (Express).
+3.  **package.json** : Copiez le fichier `package.json`.
+4.  **.env** : Créez ce fichier avec :
     ```env
     GSI_DATABASE_URL=https://groupegsi.mg/rtmggmg/api/db
     GSI_ADMIN_PASSWORD="Nina GSI"
     NODE_ENV=production
     PORT=3000
     ```
-    *Note: Utilisez des guillemets pour le mot de passe s'il contient des espaces.*
-
-### Arborescence sur cPanel :
-```text
-/gsi-smartpay
-├── .env                  <-- Vos secrets
-├── server.js             <-- Le serveur Express (Mis à jour pour être compatible avec toutes les versions)
-├── package.json
-├── out/                  <-- Dossier statique généré par 'npm run build'
-└── node_modules/         <-- Installés via "npm install" sur cPanel
-```
 
 ## 3. Configuration de l'Application Node.js (cPanel)
 
-- **Application Root** : `public_html/gsi-smartpay`
+- **Application Root** : le chemin de votre dossier (ex: `public_html/gsi-smartpay`).
 - **Application URL** : `groupegsi.mg/gsi-smartpay`
 - **Application Startup File** : `server.js`
 - **Node Version** : 18.x ou 20.x
-- **Run JS Install (IMPORTANT)** : Cliquez sur ce bouton dans cPanel pour installer `axios`, `express`, `dotenv`, etc. **Sans cette étape, vous aurez une erreur "Cannot find module 'axios'".**
-- **Restart** : Redémarrez l'application après l'installation.
+- **Run JS Install** : Cliquez sur ce bouton pour installer `axios`, `express`, `dotenv`, etc.
+- **Restart** : Redémarrez l'application.
 
-## 4. Résolution des problèmes (Logs cPanel)
+## 4. Collections de la Base de Données
 
-*   **Error: Connection failed to ...** : Vérifiez que l'URL `GSI_DATABASE_URL` dans votre `.env` est correcte et accessible depuis le serveur.
-*   **Error: Cannot find module 'axios'** : Vous avez oublié de cliquer sur "Run JS Install" dans l'interface Node.js de cPanel.
-*   **PathError [TypeError]** : Résolu dans cette version de `server.js` en évitant les expressions régulières complexes (utilisation de `app.use` à la place).
-*   **503 Service Unavailable** :
-    1.  Vérifiez que vous avez cliqué sur "Run JS Install".
-    2.  Vérifiez que toutes les variables sont dans le fichier `.env` à la racine.
-    3.  Vérifiez les logs de démarrage dans cPanel pour voir si les variables sont marquées comme `MISSING`.
+Le système utilise désormais les collections suivantes dans votre API :
+- `users` : Contient les étudiants.
+- `staff` : Contient les comptes des agents et comptables (créés par l'admin).
+- `ecolage` : Suivi des écolages.
+- `paiements` : Historique des transactions.
+- `expenses` : Journal des dépenses.
+- `fees` : Configuration des tarifs par filière.
+
+## 5. Résolution des problèmes
+
+*   **Comptes non visibles** : Assurez-vous que la collection `staff` existe dans votre base de données.
+*   **Suppression impossible** : Seul le compte administrateur peut supprimer des données. Vérifiez que vous êtes bien sur le panneau Admin.
+*   **503 Service Unavailable** : Vérifiez les logs Node.js dans cPanel. Si `axios` est manquant, refaites "Run JS Install".
