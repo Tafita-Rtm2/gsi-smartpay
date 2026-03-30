@@ -1,10 +1,15 @@
 // GSI SmartPay - Serveur API Express pour cPanel
-// Ce serveur gère la sécurité, le proxy API, et sert les fichiers statiques de "out/"
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const axios = require('axios');
-require('dotenv').config();
+const fs = require('fs');
+
+// Chargement du .env
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath });
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -12,6 +17,10 @@ const SESSION_COOKIE = "gsi_secure_session";
 
 app.use(express.json());
 app.use(cookieParser());
+
+// Debugging logs pour cPanel (voir stderr)
+console.log(`[INIT] GSI_DATABASE_URL: ${process.env.GSI_DATABASE_URL ? 'PRESENT' : 'MISSING'}`);
+console.log(`[INIT] GSI_ADMIN_PASSWORD: ${process.env.GSI_ADMIN_PASSWORD ? 'PRESENT' : 'MISSING'}`);
 
 // --- ROUTES AUTHENTIFICATION ---
 
@@ -63,14 +72,18 @@ app.get('/gsi-smartpay/api/auth/session/', (req, res) => {
   }
 });
 
-// --- PROXY API BASE DE DONNÉES (Utilisation de app.use pour éviter les bugs regex) ---
+// --- PROXY API BASE DE DONNÉES ---
 
 app.use('/gsi-smartpay/api/db', async (req, res) => {
-  const API_BASE = process.env.GSI_DATABASE_URL;
-  if (!API_BASE) return res.status(500).json({ error: "Missing API_BASE env" });
+  let API_BASE = process.env.GSI_DATABASE_URL;
+  if (!API_BASE) {
+    console.error("[ERROR] GSI_DATABASE_URL is not defined in .env");
+    return res.status(500).json({ error: "Configuration error: Missing API URL" });
+  }
 
-  // On récupère le reste du chemin (ex: /users)
-  const pathSuffix = req.url.split('?')[0]; // Enlève les query params pour construire l'URL de base
+  // Nettoyage de l'URL pour éviter les doubles slashes
+  API_BASE = API_BASE.replace(/\/+$/, '');
+  const pathSuffix = req.url.split('?')[0].replace(/^\/*/, '/');
   const url = `${API_BASE}${pathSuffix}`;
 
   // Vérification session
@@ -93,7 +106,7 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     const config = {
       method: req.method,
       url: url,
-      params: req.query, // Transmet les paramètres de recherche
+      params: req.query,
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json"
@@ -109,7 +122,7 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
 
     // Isolation des données pour les non-admins
     if (req.method === "GET" && role !== "admin") {
-      const collection = pathSuffix.split('/')[1]; // /users -> users
+      const collection = pathSuffix.split('/')[1];
       const myEtab = userSession.etablissement;
 
       const belongsToMe = (item) => {
@@ -129,9 +142,9 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
 
     return res.status(apiRes.status).json(data);
   } catch (error) {
-    console.error("Proxy error:", error.message);
+    console.error(`[PROXY ERROR] ${req.method} ${url} :`, error.message);
     const status = error.response ? error.response.status : 500;
-    const errorData = error.response ? error.response.data : { error: "Failed to fetch from upstream" };
+    const errorData = error.response ? error.response.data : { error: `Failed to connect to database at ${url}` };
     return res.status(status).json(errorData);
   }
 });
@@ -141,9 +154,8 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
 const outPath = path.join(__dirname, 'out');
 app.use('/gsi-smartpay/', express.static(outPath));
 
-// Fallback pour les SPA - On utilise un middleware global
+// Fallback pour les SPA
 app.use('/gsi-smartpay', (req, res, next) => {
-  // S'il n'y a pas d'extension de fichier (ex: .js, .css, .png), on sert index.html
   if (!req.url.includes('.')) {
     return res.sendFile(path.join(outPath, 'index.html'));
   }
@@ -151,5 +163,5 @@ app.use('/gsi-smartpay', (req, res, next) => {
 });
 
 app.listen(port, () => {
-  console.log(`> GSI SmartPay API & Static server running on port ${port}`);
+  console.log(`> GSI SmartPay server running on port ${port}`);
 });
