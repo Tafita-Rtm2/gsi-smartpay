@@ -1,29 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Output standalone est parfait pour cPanel car il isole tout ce qui est nécessaire
-  output: 'standalone',
+  // Le mode export génère un dossier "out/" qui contient uniquement du HTML/CSS/JS statique.
+  // C'est parfait pour cPanel car cela évite toutes les erreurs "Module not found" liées à Next.js runtime.
+  output: 'export',
 
   // Le basePath est critique car l'URL est groupegsi.mg/gsi-smartpay/
   basePath: '/gsi-smartpay',
 
-  // trailingSlash: true aide à résoudre les redirections infinies sur Apache (cPanel)
+  // trailingSlash: true est nécessaire pour que les dossiers statiques fonctionnent bien sur Apache
   trailingSlash: true,
 
   images: {
-    // Désactive l'optimisation native (évite l'erreur 'sharp' sur cPanel)
+    // Requis pour 'output: export'
     unoptimized: true,
   },
 
-  // swcMinify: false peut éviter des plantages sur certains environnements cPanel/Node anciens
+  // On garde ces options pour la stabilité globale du build
   swcMinify: false,
-
-  // Désactive la compression gzip par défaut car cPanel s'en charge via Apache (évite double compression)
-  compress: false,
-
-  // Assure que le tracing des fichiers pour standalone fonctionne depuis la racine du projet
-  experimental: {
-    outputFileTracingRoot: process.cwd(),
-  },
 }
 
 module.exports = nextConfig

@@ -1,51 +1,56 @@
-# Guide de Déploiement Définitif pour cPanel (GSI SmartPay)
+# Guide de Déploiement Statique + API Express (GSI SmartPay)
 
-Ce guide résout les erreurs `ERR_TOO_MANY_REDIRECTS` et `503 Service Unavailable` sur `groupegsi.mg/gsi-smartpay/`.
+Cette méthode est la plus robuste pour cPanel car elle sépare le frontend statique du backend API, évitant ainsi les erreurs `Module not found` de Next.js.
 
 ## 1. Préparation Locale
 
-1.  Vérifiez `next.config.js` :
-    - `output: 'standalone'`
-    - `basePath: '/gsi-smartpay'`
-    - `trailingSlash: true`
-2.  Lancez le build : `npm run build`
-3.  Le build est généré dans `.next/standalone` et `.next/static`.
+1.  Assurez-vous que `next.config.js` contient `output: 'export'`.
+2.  Générez le build statique :
+    ```bash
+    npm run build
+    ```
+3.  Cela va créer un dossier nommé `out/` à la racine de votre projet.
 
 ## 2. Structure des fichiers sur cPanel
 
 Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), placez les fichiers comme suit :
 
-1.  **Copiez tout le contenu de `.next/standalone/`** directement à la racine de votre dossier cPanel.
-2.  **Copiez le dossier `public/`** (du projet racine) à la racine de votre dossier cPanel.
-3.  **Copiez le dossier `.next/static/`** (du projet racine) vers `.next/static/` sur cPanel.
-4.  **REMPLACEZ le `server.js`** généré par Next.js par le **`server.js` personnalisé** que j'ai créé (celui qui contient `require('dotenv').config()`).
-5.  **Créez un fichier `.env`** à la racine avec vos accès secrets.
+1.  **Copiez tout le dossier `out/`** généré localement vers la racine de votre dossier cPanel.
+2.  **Copiez le fichier `server.js`** (Express) à la racine de votre dossier cPanel.
+3.  **Copiez le fichier `package.json`** à la racine.
+4.  **Créez un fichier `.env`** à la racine avec vos accès :
+    ```env
+    GSI_DATABASE_URL=https://votre-url-api.com
+    GSI_ADMIN_PASSWORD=VotreMotDePasse
+    NODE_ENV=production
+    PORT=3000
+    ```
 
-### Arborescence Finale sur cPanel :
+### Arborescence sur cPanel :
 ```text
 /gsi-smartpay
-├── .env                  <-- Vos secrets ici (DATABASE_URL, etc.)
-├── server.js             <-- LE SERVER.JS PERSONNALISÉ (avec dotenv)
+├── .env                  <-- Vos secrets
+├── server.js             <-- Le serveur Express
 ├── package.json
-├── .next/
-│   ├── server/
-│   └── static/           <-- Copié depuis le dossier .next/static local
-├── public/               <-- Copié depuis le dossier public local
+├── out/                  <-- Dossier statique généré par 'npm run build'
+│   ├── index.html
+│   ├── dashboard/
+│   ├── _next/
+│   └── ...
 └── node_modules/         <-- Installés via "npm install" sur cPanel
 ```
 
-## 3. Configuration Node.js (cPanel)
+## 3. Configuration de l'Application Node.js (cPanel)
 
 - **Application Root** : `public_html/gsi-smartpay`
 - **Application URL** : `groupegsi.mg/gsi-smartpay`
 - **Application Startup File** : `server.js`
-- **Node Version** : 18.x ou +
-- **Run JS Install** : Cliquez sur ce bouton pour installer les dépendances (dont `dotenv`).
+- **Node Version** : 18.x ou 20.x
+- **Run JS Install** : Cliquez sur ce bouton pour installer `express`, `dotenv`, `node-fetch`, etc.
+- **Restart** : Redémarrez l'application.
 
-## 4. Sécurité et Performance
+## 4. Pourquoi c'est mieux ?
 
-Le `server.js` personnalisé assure que :
-- Les variables `.env` sont chargées au démarrage.
-- Le serveur écoute sur le bon port fourni par cPanel.
-- Le `basePath` est respecté pour éviter les erreurs 404/500 sur les routes.
-- Le `trailingSlash: true` dans `next.config.js` évite les boucles de redirections infinies d'Apache.
+*   **Zéro dépendance Next.js au runtime** : Le serveur cPanel ne fait que servir des fichiers HTML/JS déjà compilés et agit comme un simple proxy API léger.
+*   **Sécurité** : Les variables d'environnement sont gérées par Express et ne sont jamais exposées au client.
+*   **Stabilité** : Élimine les erreurs 503 liées à la compilation à la volée ou aux modules manquants dans le bundle Next.js complexe.
