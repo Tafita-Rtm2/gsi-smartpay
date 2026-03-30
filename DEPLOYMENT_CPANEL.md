@@ -1,64 +1,63 @@
-# Guide de Déploiement cPanel pour GSI SmartPay
+# Guide de Déploiement cPanel (Next.js Standalone) - GSI SmartPay
 
-Ce guide vous explique comment déployer l'application GSI SmartPay sur votre serveur cPanel dans le dossier `/home/groupegs/domains/groupesgi.mg/gsi-smartpay` afin qu'elle soit accessible via l'URL `groupegsi.mg/gsi-smartpay`.
+Si vous obtenez une erreur **503 Service Unavailable**, cela signifie généralement que le serveur Node.js ne parvient pas à démarrer ou s'arrête immédiatement après le lancement.
 
-## 1. Préparation du code pour la production
+Voici la structure exacte et les étapes pour corriger ce problème sur cPanel.
 
-Avant d'envoyer les fichiers sur cPanel, assurez-vous que la configuration est prête :
+## 1. Préparation Locale
 
-1.  **Vérification du `next.config.js`** :
-    Le fichier doit contenir `basePath: '/gsi-smartpay'` (ce que j'ai déjà configuré pour vous). Cela permet à Next.js de savoir que le site ne tourne pas à la racine du domaine.
-2.  **Génération du Build** :
-    Dans votre terminal local (sur votre ordinateur), lancez la commande :
-    ```bash
-    npm run build
+1.  Assurez-vous que `next.config.js` est configuré ainsi :
+    ```js
+    module.exports = {
+      output: 'standalone',
+      basePath: '/gsi-smartpay',
+      assetPrefix: '/gsi-smartpay',
+    }
     ```
-    Cela va créer un dossier `.next` optimisé pour la production.
+2.  Générez le build : `npm run build`
 
-## 2. Configuration sur cPanel
+## 2. Transfert des fichiers vers cPanel
 
-### Étape A : Créer l'application Node.js
-1.  Connectez-vous à votre interface **cPanel**.
-2.  Cherchez l'outil **"Setup Node.js App"** (souvent dans la section Logiciels/Software).
-3.  Cliquez sur **"Create Application"**.
-4.  Remplissez les champs comme suit :
-    *   **Node.js version** : Sélectionnez une version récente (ex: 18.x ou 20.x).
-    *   **Application mode** : Production.
-    *   **Application root** : `domains/groupesgi.mg/gsi-smartpay`.
-    *   **Application URL** : `groupesgi.mg/gsi-smartpay`.
-    *   **Application startup file** : `server.js`.
-5.  Cliquez sur **"Create"**.
+Allez dans votre dossier de destination (ex: `public_html/gsi-smartpay/` ou `domains/votre-domaine.mg/gsi-smartpay/`).
 
-### Étape B : Variables d'environnement (.env)
-Dans la même interface "Node.js App" :
-1.  Allez dans la section **"Environment variables"**.
-2.  Ajoutez les variables suivantes (très important pour la sécurité) :
-    *   `GSI_DATABASE_URL` = `https://groupegsi.mg/rtmggmg/api/db`
-    *   `GSI_ADMIN_PASSWORD` = `Nina GSI`
-    *   `NODE_ENV` = `production`
-3.  Cliquez sur **"Save"**.
+**Vous devez copier les éléments suivants depuis votre PC :**
 
-## 3. Transfert des fichiers
+1.  Tout le contenu du dossier `.next/standalone/` vers la racine du dossier cPanel.
+    *(Cela inclut `server.js`, `package.json` et un dossier `node_modules` spécifique).*
+2.  Le dossier `public/` (situé à la racine de votre projet sur PC) vers la racine du dossier cPanel.
+3.  Le dossier `.next/static/` (situé dans `.next/` sur votre PC) vers le dossier `.next/static/` sur cPanel.
 
-Utilisez le **Gestionnaire de fichiers** cPanel ou un client **FTP** (comme FileZilla) pour envoyer les fichiers suivants dans `/home/groupegs/domains/groupesgi.mg/gsi-smartpay` :
+**Structure finale sur le serveur :**
+```text
+gsi-smartpay/
+├── .next/
+│   ├── server/
+│   ├── static/          <-- COPIÉ DEPUIS .next/static
+│   └── ...
+├── node_modules/        <-- COPIÉ DEPUIS .next/standalone/node_modules
+├── public/              <-- COPIÉ DEPUIS la racine du projet PC
+├── .env                 <-- CRÉÉ MANUELLEMENT (voir section 3)
+├── package.json
+└── server.js
+```
 
-1.  Le dossier `.next`
-2.  Le dossier `public`
-3.  Le fichier `package.json`
-4.  Le fichier `next.config.js`
-5.  **TRÈS IMPORTANT** : Copiez le fichier `server.js` qui se trouve à l'intérieur du dossier `.next/standalone/server.js` vers la racine de votre application (`/gsi-smartpay/server.js`).
-6.  Copiez également tout le contenu de `.next/static` vers `.next/standalone/.next/static`.
+## 3. Configuration Node.js dans cPanel
 
-## 4. Installation des dépendances
+1.  **Version de Node** : Choisissez **18.x** ou **20.x**.
+2.  **Application Startup file** : `server.js`
+3.  **Variables d'Environnement** (À ajouter dans l'interface cPanel) :
+    - `GSI_DATABASE_URL` : `https://groupegsi.mg/rtmggmg/api/db`
+    - `GSI_ADMIN_PASSWORD` : `Nina GSI`
+    - `NODE_ENV` : `production`
+    - `HOSTNAME` : `127.0.0.1`
 
-1.  Retournez dans **"Setup Node.js App"** sur cPanel.
-2.  Cliquez sur le bouton **"Run JS Install"** (ou "npm install"). Cela va installer tous les modules nécessaires sur le serveur.
-3.  Une fois terminé, cliquez sur **"Restart"** pour lancer l'application.
+## 4. Pourquoi l'erreur 503 ? (Checklist de résolution)
 
-## 5. Résolution des problèmes courants
+*   **Fichiers manquants** : L'erreur 503 arrive souvent si `node_modules` n'est pas présent à côté de `server.js`. Assurez-vous d'avoir copié celui qui est **dans** `.next/standalone/`.
+*   **Permissions** : Vérifiez que les dossiers ont les permissions `755` et les fichiers `644`.
+*   **Conflit de Port** : Next.js essaie de démarrer sur le port 3000 par défaut. cPanel gère cela automatiquement via Passenger, mais assurez-vous de ne pas avoir de variable `PORT` qui bloque le démarrage.
+*   **Logs d'erreurs** : Dans l'interface "Setup Node.js App", cherchez un lien vers les fichiers de logs (stderr.log). C'est là que la véritable erreur est écrite.
+*   **Restart** : Cliquez sur le bouton **"Restart"** après chaque changement de fichier ou de variable.
 
-*   **Erreur 404 sur les images/CSS** : Vérifiez que `assetPrefix` est bien présent dans `next.config.js`.
-*   **Site qui ne démarre pas** : Consultez les "Logs" dans l'interface Node.js App de cPanel.
-*   **Problème de droits** : Assurez-vous que le dossier `gsi-smartpay` a les permissions correctes (généralement 755).
-
-Votre application devrait maintenant être accessible en toute sécurité sur `groupegsi.mg/gsi-smartpay` !
+## 5. Astuce pour le CSS (Si le site charge sans design)
+Si les styles (CSS) ne s'affichent pas, vérifiez que vous avez bien un dossier `static` dans `gsi-smartpay/.next/static/`.
