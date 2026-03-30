@@ -30,7 +30,7 @@ Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), p
 ```text
 /gsi-smartpay
 ├── .env                  <-- Vos secrets
-├── server.js             <-- Le serveur Express (Mis à jour pour Express 5)
+├── server.js             <-- Le serveur Express (Mis à jour pour être compatible avec toutes les versions)
 ├── package.json
 ├── out/                  <-- Dossier statique généré par 'npm run build'
 └── node_modules/         <-- Installés via "npm install" sur cPanel
@@ -48,5 +48,8 @@ Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), p
 ## 4. Résolution des problèmes (Logs cPanel)
 
 *   **Error: Cannot find module 'axios'** : Vous avez oublié de cliquer sur "Run JS Install" dans l'interface Node.js de cPanel.
-*   **PathError [TypeError]** : Résolu dans la dernière version de `server.js` en utilisant des parenthèses pour les jokers `(.*)`.
-*   **503 Service Unavailable** : Vérifiez que le port est bien 3000 ou celui configuré par cPanel, et que toutes les variables `.env` sont présentes.
+*   **PathError [TypeError]** : Résolu dans cette version de `server.js` en évitant les expressions régulières complexes (utilisation de `app.use` à la place).
+*   **503 Service Unavailable** :
+    1.  Vérifiez que vous avez cliqué sur "Run JS Install".
+    2.  Vérifiez que toutes les variables sont dans le fichier `.env` à la racine.
+    3.  Vérifiez les logs pour voir s'il y a une erreur sur une ligne spécifique.

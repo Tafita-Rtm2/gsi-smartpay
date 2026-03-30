@@ -63,15 +63,15 @@ app.get('/gsi-smartpay/api/auth/session/', (req, res) => {
   }
 });
 
-// --- PROXY API BASE DE DONNÉES ---
+// --- PROXY API BASE DE DONNÉES (Utilisation de app.use pour éviter les bugs regex) ---
 
-// Note: Express 5 nécessite de nommer les groupes de regex
-app.all('/gsi-smartpay/api/db/:path(*)', async (req, res) => {
+app.use('/gsi-smartpay/api/db', async (req, res) => {
   const API_BASE = process.env.GSI_DATABASE_URL;
   if (!API_BASE) return res.status(500).json({ error: "Missing API_BASE env" });
 
-  const pathSuffix = req.params.path;
-  const url = `${API_BASE}/${pathSuffix}`;
+  // On récupère le reste du chemin (ex: /users)
+  const pathSuffix = req.url.split('?')[0]; // Enlève les query params pour construire l'URL de base
+  const url = `${API_BASE}${pathSuffix}`;
 
   // Vérification session
   const sessionStr = req.cookies[SESSION_COOKIE];
@@ -93,6 +93,7 @@ app.all('/gsi-smartpay/api/db/:path(*)', async (req, res) => {
     const config = {
       method: req.method,
       url: url,
+      params: req.query, // Transmet les paramètres de recherche
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json"
@@ -108,7 +109,7 @@ app.all('/gsi-smartpay/api/db/:path(*)', async (req, res) => {
 
     // Isolation des données pour les non-admins
     if (req.method === "GET" && role !== "admin") {
-      const collection = pathSuffix.split('/')[0];
+      const collection = pathSuffix.split('/')[1]; // /users -> users
       const myEtab = userSession.etablissement;
 
       const belongsToMe = (item) => {
@@ -140,14 +141,13 @@ app.all('/gsi-smartpay/api/db/:path(*)', async (req, res) => {
 const outPath = path.join(__dirname, 'out');
 app.use('/gsi-smartpay/', express.static(outPath));
 
-// Fallback pour les SPA - Utilise aussi un paramètre nommé
-app.get('/gsi-smartpay/:path(*)', (req, res) => {
-  const filePath = path.join(outPath, req.params.path, 'index.html');
-  res.sendFile(filePath, (err) => {
-    if (err) {
-      res.sendFile(path.join(outPath, 'index.html'));
-    }
-  });
+// Fallback pour les SPA - On utilise un middleware global
+app.use('/gsi-smartpay', (req, res, next) => {
+  // S'il n'y a pas d'extension de fichier (ex: .js, .css, .png), on sert index.html
+  if (!req.url.includes('.')) {
+    return res.sendFile(path.join(outPath, 'index.html'));
+  }
+  next();
 });
 
 app.listen(port, () => {
