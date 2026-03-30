@@ -65,12 +65,12 @@ app.get('/gsi-smartpay/api/auth/session/', (req, res) => {
 
 // --- PROXY API BASE DE DONNÉES ---
 
-// Note: Express 5 requires (.*) for wildcards
-app.all('/gsi-smartpay/api/db/(.*)', async (req, res) => {
+// Note: Express 5 nécessite de nommer les groupes de regex
+app.all('/gsi-smartpay/api/db/:path(*)', async (req, res) => {
   const API_BASE = process.env.GSI_DATABASE_URL;
   if (!API_BASE) return res.status(500).json({ error: "Missing API_BASE env" });
 
-  const pathSuffix = req.params[0];
+  const pathSuffix = req.params.path;
   const url = `${API_BASE}/${pathSuffix}`;
 
   // Vérification session
@@ -140,9 +140,9 @@ app.all('/gsi-smartpay/api/db/(.*)', async (req, res) => {
 const outPath = path.join(__dirname, 'out');
 app.use('/gsi-smartpay/', express.static(outPath));
 
-// Fallback pour les SPA
-app.get('/gsi-smartpay/(.*)', (req, res) => {
-  const filePath = path.join(outPath, req.params[0], 'index.html');
+// Fallback pour les SPA - Utilise aussi un paramètre nommé
+app.get('/gsi-smartpay/:path(*)', (req, res) => {
+  const filePath = path.join(outPath, req.params.path, 'index.html');
   res.sendFile(filePath, (err) => {
     if (err) {
       res.sendFile(path.join(outPath, 'index.html'));
