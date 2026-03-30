@@ -30,13 +30,9 @@ Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), p
 ```text
 /gsi-smartpay
 ├── .env                  <-- Vos secrets
-├── server.js             <-- Le serveur Express
+├── server.js             <-- Le serveur Express (Mis à jour pour Express 5)
 ├── package.json
 ├── out/                  <-- Dossier statique généré par 'npm run build'
-│   ├── index.html
-│   ├── dashboard/
-│   ├── _next/
-│   └── ...
 └── node_modules/         <-- Installés via "npm install" sur cPanel
 ```
 
@@ -46,11 +42,11 @@ Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), p
 - **Application URL** : `groupegsi.mg/gsi-smartpay`
 - **Application Startup File** : `server.js`
 - **Node Version** : 18.x ou 20.x
-- **Run JS Install** : Cliquez sur ce bouton pour installer `express`, `dotenv`, `node-fetch`, etc.
-- **Restart** : Redémarrez l'application.
+- **Run JS Install (IMPORTANT)** : Cliquez sur ce bouton dans cPanel pour installer `axios`, `express`, `dotenv`, etc. **Sans cette étape, vous aurez une erreur "Cannot find module 'axios'".**
+- **Restart** : Redémarrez l'application après l'installation.
 
-## 4. Pourquoi c'est mieux ?
+## 4. Résolution des problèmes (Logs cPanel)
 
-*   **Zéro dépendance Next.js au runtime** : Le serveur cPanel ne fait que servir des fichiers HTML/JS déjà compilés et agit comme un simple proxy API léger.
-*   **Sécurité** : Les variables d'environnement sont gérées par Express et ne sont jamais exposées au client.
-*   **Stabilité** : Élimine les erreurs 503 liées à la compilation à la volée ou aux modules manquants dans le bundle Next.js complexe.
+*   **Error: Cannot find module 'axios'** : Vous avez oublié de cliquer sur "Run JS Install" dans l'interface Node.js de cPanel.
+*   **PathError [TypeError]** : Résolu dans la dernière version de `server.js` en utilisant des parenthèses pour les jokers `(.*)`.
+*   **503 Service Unavailable** : Vérifiez que le port est bien 3000 ou celui configuré par cPanel, et que toutes les variables `.env` sont présentes.

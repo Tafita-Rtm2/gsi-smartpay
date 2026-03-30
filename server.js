@@ -65,7 +65,8 @@ app.get('/gsi-smartpay/api/auth/session/', (req, res) => {
 
 // --- PROXY API BASE DE DONNÉES ---
 
-app.all('/gsi-smartpay/api/db/*', async (req, res) => {
+// Note: Express 5 requires (.*) for wildcards
+app.all('/gsi-smartpay/api/db/(.*)', async (req, res) => {
   const API_BASE = process.env.GSI_DATABASE_URL;
   if (!API_BASE) return res.status(500).json({ error: "Missing API_BASE env" });
 
@@ -136,15 +137,11 @@ app.all('/gsi-smartpay/api/db/*', async (req, res) => {
 
 // --- FICHIERS STATIQUES (Dossier out/) ---
 
-// Important: Next.js 'export' met tout dans le dossier 'out/'
 const outPath = path.join(__dirname, 'out');
-
-// Servir les fichiers statiques de out/
 app.use('/gsi-smartpay/', express.static(outPath));
 
-// Redirection vers index.html pour les routes SPA si fichier non trouvé
-app.get('/gsi-smartpay/*', (req, res) => {
-  // S'assurer que les chemins comme /dashboard/ sont servis par /dashboard/index.html
+// Fallback pour les SPA
+app.get('/gsi-smartpay/(.*)', (req, res) => {
   const filePath = path.join(outPath, req.params[0], 'index.html');
   res.sendFile(filePath, (err) => {
     if (err) {
