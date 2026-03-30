@@ -1,4 +1,4 @@
-name: Build pour cPanel
+name: Build pour cPanel (Statique + API Express)
 
 on:
   push:
@@ -22,22 +22,25 @@ jobs:
       - name: Build de l'application
         run: npm run build
 
-      - name: Organisation des fichiers
+      - name: Organisation des fichiers pour cPanel
         run: |
-          mkdir -p deploy/.next
-          # Copie le coeur de l'application
-          cp -r .next/standalone/. deploy/
-          # Copie les fichiers statiques (CSS/JS)
-          cp -r .next/static deploy/.next/static
-          # Copie le dossier public seulement s'il existe
+          mkdir -p deploy
+
+          # 1. Copie le frontend statique généré dans "out/"
+          cp -r out deploy/out
+
+          # 2. Copie le serveur API léger
+          cp server.js deploy/server.js
+
+          # 3. Copie le package.json (essentiel pour npm install sur cPanel)
+          cp package.json deploy/package.json
+
+          # 4. Copie le dossier public par sécurité
           if [ -d "public" ]; then cp -r public deploy/public; fi
-          # Copie les fichiers de config
-          cp package.json deploy/
-          cp next.config.js deploy/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gsi-smartpay-build
+          name: gsi-smartpay-full-package
           path: deploy/
           include-hidden-files: true
