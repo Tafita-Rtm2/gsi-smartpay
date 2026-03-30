@@ -3,7 +3,7 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const fetch = require('node-fetch');
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -89,8 +89,9 @@ app.all('/gsi-smartpay/api/db/*', async (req, res) => {
   }
 
   try {
-    const options = {
+    const config = {
       method: req.method,
+      url: url,
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json"
@@ -98,11 +99,11 @@ app.all('/gsi-smartpay/api/db/*', async (req, res) => {
     };
 
     if (["POST", "PATCH", "PUT"].includes(req.method)) {
-      options.body = JSON.stringify(req.body);
+      config.data = req.body;
     }
 
-    const apiRes = await fetch(url, options);
-    let data = await apiRes.json();
+    const apiRes = await axios(config);
+    let data = apiRes.data;
 
     // Isolation des données pour les non-admins
     if (req.method === "GET" && role !== "admin") {
@@ -126,8 +127,10 @@ app.all('/gsi-smartpay/api/db/*', async (req, res) => {
 
     return res.status(apiRes.status).json(data);
   } catch (error) {
-    console.error("Proxy error:", error);
-    return res.status(500).json({ error: "Failed to fetch from upstream" });
+    console.error("Proxy error:", error.message);
+    const status = error.response ? error.response.status : 500;
+    const errorData = error.response ? error.response.data : { error: "Failed to fetch from upstream" };
+    return res.status(status).json(errorData);
   }
 });
 
