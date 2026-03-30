@@ -20,11 +20,12 @@ Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), p
 3.  **Copiez le fichier `package.json`** à la racine.
 4.  **Créez un fichier `.env`** à la racine avec vos accès :
     ```env
-    GSI_DATABASE_URL=https://votre-url-api.com
-    GSI_ADMIN_PASSWORD=VotreMotDePasse
+    GSI_DATABASE_URL=https://groupegsi.mg/rtmggmg/api/db
+    GSI_ADMIN_PASSWORD="Nina GSI"
     NODE_ENV=production
     PORT=3000
     ```
+    *Note: Utilisez des guillemets pour le mot de passe s'il contient des espaces.*
 
 ### Arborescence sur cPanel :
 ```text
@@ -47,9 +48,10 @@ Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), p
 
 ## 4. Résolution des problèmes (Logs cPanel)
 
+*   **Error: Connection failed to ...** : Vérifiez que l'URL `GSI_DATABASE_URL` dans votre `.env` est correcte et accessible depuis le serveur.
 *   **Error: Cannot find module 'axios'** : Vous avez oublié de cliquer sur "Run JS Install" dans l'interface Node.js de cPanel.
 *   **PathError [TypeError]** : Résolu dans cette version de `server.js` en évitant les expressions régulières complexes (utilisation de `app.use` à la place).
 *   **503 Service Unavailable** :
     1.  Vérifiez que vous avez cliqué sur "Run JS Install".
     2.  Vérifiez que toutes les variables sont dans le fichier `.env` à la racine.
-    3.  Vérifiez les logs pour voir s'il y a une erreur sur une ligne spécifique.
+    3.  Vérifiez les logs de démarrage dans cPanel pour voir si les variables sont marquées comme `MISSING`.
