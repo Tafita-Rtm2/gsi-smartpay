@@ -41,7 +41,7 @@ export default function LoginPage() {
     setLoading(true);
     setAdminError("");
     try {
-      const res = await fetch("/gsi-smartpay/api/auth/admin", {
+      const res = await fetch("/gsi-smartpay/api/auth/admin/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: adminPwd }),
@@ -50,7 +50,7 @@ export default function LoginPage() {
       if (data.ok) {
         // Also create a session for admin
         const adminUser = { id: "admin-1", role: "admin", etablissement: "analakely" };
-        await fetch("/gsi-smartpay/api/auth/session", {
+        await fetch("/gsi-smartpay/api/auth/session/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user: adminUser }),

@@ -1,64 +1,51 @@
-# Guide de Déploiement cPanel pour GSI SmartPay
+# Guide de Déploiement Définitif pour cPanel (GSI SmartPay)
 
-Ce guide vous explique comment déployer l'application GSI SmartPay sur votre serveur cPanel dans le dossier `/home/groupegs/domains/groupesgi.mg/gsi-smartpay` afin qu'elle soit accessible via l'URL `groupegsi.mg/gsi-smartpay`.
+Ce guide résout les erreurs `ERR_TOO_MANY_REDIRECTS` et `503 Service Unavailable` sur `groupegsi.mg/gsi-smartpay/`.
 
-## 1. Préparation du code pour la production
+## 1. Préparation Locale
 
-Avant d'envoyer les fichiers sur cPanel, assurez-vous que la configuration est prête :
+1.  Vérifiez `next.config.js` :
+    - `output: 'standalone'`
+    - `basePath: '/gsi-smartpay'`
+    - `trailingSlash: true`
+2.  Lancez le build : `npm run build`
+3.  Le build est généré dans `.next/standalone` et `.next/static`.
 
-1.  **Vérification du `next.config.js`** :
-    Le fichier doit contenir `basePath: '/gsi-smartpay'` (ce que j'ai déjà configuré pour vous). Cela permet à Next.js de savoir que le site ne tourne pas à la racine du domaine.
-2.  **Génération du Build** :
-    Dans votre terminal local (sur votre ordinateur), lancez la commande :
-    ```bash
-    npm run build
-    ```
-    Cela va créer un dossier `.next` optimisé pour la production.
+## 2. Structure des fichiers sur cPanel
 
-## 2. Configuration sur cPanel
+Dans votre dossier d'application sur cPanel (ex: `public_html/gsi-smartpay/`), placez les fichiers comme suit :
 
-### Étape A : Créer l'application Node.js
-1.  Connectez-vous à votre interface **cPanel**.
-2.  Cherchez l'outil **"Setup Node.js App"** (souvent dans la section Logiciels/Software).
-3.  Cliquez sur **"Create Application"**.
-4.  Remplissez les champs comme suit :
-    *   **Node.js version** : Sélectionnez une version récente (ex: 18.x ou 20.x).
-    *   **Application mode** : Production.
-    *   **Application root** : `domains/groupesgi.mg/gsi-smartpay`.
-    *   **Application URL** : `groupesgi.mg/gsi-smartpay`.
-    *   **Application startup file** : `server.js`.
-5.  Cliquez sur **"Create"**.
+1.  **Copiez tout le contenu de `.next/standalone/`** directement à la racine de votre dossier cPanel.
+2.  **Copiez le dossier `public/`** (du projet racine) à la racine de votre dossier cPanel.
+3.  **Copiez le dossier `.next/static/`** (du projet racine) vers `.next/static/` sur cPanel.
+4.  **REMPLACEZ le `server.js`** généré par Next.js par le **`server.js` personnalisé** que j'ai créé (celui qui contient `require('dotenv').config()`).
+5.  **Créez un fichier `.env`** à la racine avec vos accès secrets.
 
-### Étape B : Variables d'environnement (.env)
-Dans la même interface "Node.js App" :
-1.  Allez dans la section **"Environment variables"**.
-2.  Ajoutez les variables suivantes (très important pour la sécurité) :
-    *   `GSI_DATABASE_URL` = `https://groupegsi.mg/rtmggmg/api/db`
-    *   `GSI_ADMIN_PASSWORD` = `Nina GSI`
-    *   `NODE_ENV` = `production`
-3.  Cliquez sur **"Save"**.
+### Arborescence Finale sur cPanel :
+```text
+/gsi-smartpay
+├── .env                  <-- Vos secrets ici (DATABASE_URL, etc.)
+├── server.js             <-- LE SERVER.JS PERSONNALISÉ (avec dotenv)
+├── package.json
+├── .next/
+│   ├── server/
+│   └── static/           <-- Copié depuis le dossier .next/static local
+├── public/               <-- Copié depuis le dossier public local
+└── node_modules/         <-- Installés via "npm install" sur cPanel
+```
 
-## 3. Transfert des fichiers
+## 3. Configuration Node.js (cPanel)
 
-Utilisez le **Gestionnaire de fichiers** cPanel ou un client **FTP** (comme FileZilla) pour envoyer les fichiers suivants dans `/home/groupegs/domains/groupesgi.mg/gsi-smartpay` :
+- **Application Root** : `public_html/gsi-smartpay`
+- **Application URL** : `groupegsi.mg/gsi-smartpay`
+- **Application Startup File** : `server.js`
+- **Node Version** : 18.x ou +
+- **Run JS Install** : Cliquez sur ce bouton pour installer les dépendances (dont `dotenv`).
 
-1.  Le dossier `.next`
-2.  Le dossier `public`
-3.  Le fichier `package.json`
-4.  Le fichier `next.config.js`
-5.  **TRÈS IMPORTANT** : Copiez le fichier `server.js` qui se trouve à l'intérieur du dossier `.next/standalone/server.js` vers la racine de votre application (`/gsi-smartpay/server.js`).
-6.  Copiez également tout le contenu de `.next/static` vers `.next/standalone/.next/static`.
+## 4. Sécurité et Performance
 
-## 4. Installation des dépendances
-
-1.  Retournez dans **"Setup Node.js App"** sur cPanel.
-2.  Cliquez sur le bouton **"Run JS Install"** (ou "npm install"). Cela va installer tous les modules nécessaires sur le serveur.
-3.  Une fois terminé, cliquez sur **"Restart"** pour lancer l'application.
-
-## 5. Résolution des problèmes courants
-
-*   **Erreur 404 sur les images/CSS** : Vérifiez que `assetPrefix` est bien présent dans `next.config.js`.
-*   **Site qui ne démarre pas** : Consultez les "Logs" dans l'interface Node.js App de cPanel.
-*   **Problème de droits** : Assurez-vous que le dossier `gsi-smartpay` a les permissions correctes (généralement 755).
-
-Votre application devrait maintenant être accessible en toute sécurité sur `groupegsi.mg/gsi-smartpay` !
+Le `server.js` personnalisé assure que :
+- Les variables `.env` sont chargées au démarrage.
+- Le serveur écoute sur le bon port fourni par cPanel.
+- Le `basePath` est respecté pour éviter les erreurs 404/500 sur les routes.
+- Le `trailingSlash: true` dans `next.config.js` évite les boucles de redirections infinies d'Apache.

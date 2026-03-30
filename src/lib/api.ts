@@ -1,7 +1,8 @@
 // We now use our local proxy to hide the real database URL and add a layer of security
 // All authentication is now handled via secure HTTP-only cookies on the server
 // Note: We use a relative path to support deployment in subdirectories (cPanel)
-export const API_BASE = "/gsi-smartpay/api/db";
+// Important: On ajoute un slash final si trailingSlash est true dans next.config.js
+export const API_BASE = "/gsi-smartpay/api/db/";
 
 export interface DBStudent {
   id?: string;

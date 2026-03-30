@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Server-side session creation
     try {
-      await fetch("/gsi-smartpay/api/auth/session", {
+      await fetch("/gsi-smartpay/api/auth/session/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user }),
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/gsi-smartpay/api/auth/logout", { method: "POST" });
+      await fetch("/gsi-smartpay/api/auth/logout/", { method: "POST" });
     } catch {}
     setCurrentUser(null);
     localStorage.removeItem(SESSION_KEY);
