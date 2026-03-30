@@ -277,16 +277,16 @@ export default function EtudiantsPage() {
 
     const id = deleteEcolageObj.id || deleteEcolageObj._id || "";
     if (id) {
-      const { deleteEcolage: apiDelEco, deletePaiement: apiDelPay } = await import("@/lib/api");
-      await apiDelEco(id);
-
-      // Also delete all payments for this student to make them "impayé" (0 paid)
-      const stId = deleteEcolageObj.etudiantId;
-      const toDelete = allPaiements.filter(p => p.etudiantId === stId);
-
-      for (const p of toDelete) {
-        const pid = p.id || p._id;
-        if (pid) await apiDelPay(pid);
+      const ok = await deleteEcolage(id);
+      if (ok) {
+        const stId = deleteEcolageObj.etudiantId;
+        const toDelete = allPaiements.filter(p => p.etudiantId === stId);
+        for (const p of toDelete) {
+          const pid = p.id || p._id;
+          if (pid) await deletePaiement(pid);
+        }
+      } else {
+        alert("Erreur: Impossible de supprimer l'écolage. Droits insuffisants ?");
       }
     }
 
@@ -298,17 +298,18 @@ export default function EtudiantsPage() {
     setDeleting(true);
     const id = deletePaiementObj.id || deletePaiementObj._id || "";
     if (id) {
-      // Delete from paiements collection
-      await deletePaiement(id);
-      // Update ecolage - subtract montant and recalculate status
-      const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
-      if (ec && (ec.id || ec._id)) {
-        const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
-        // If nothing left paid -> impaye, if partial -> en_attente, if full -> paye
-        const st: "paye"|"impaye"|"en_attente" =
-          newPaye <= 0 ? "impaye" :
-          newPaye >= ec.montantDu ? "paye" : "en_attente";
-        await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
+      const ok = await deletePaiement(id);
+      if (ok) {
+        const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
+        if (ec && (ec.id || ec._id)) {
+          const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
+          const st: "paye"|"impaye"|"en_attente" =
+            newPaye <= 0 ? "impaye" :
+            newPaye >= ec.montantDu ? "paye" : "en_attente";
+          await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
+        }
+      } else {
+        alert("Erreur: Impossible de supprimer le paiement. Seuls les admins et comptables peuvent supprimer.");
       }
     }
     await load();
@@ -875,7 +876,7 @@ export default function EtudiantsPage() {
                 <div className="text-xs text-slate-400 truncate">{payStudent.matricule} · {payStudent.filiere}</div>
                 {payEcolage && payEcolage.montantDu > 0
                   ? <div className="text-xs text-red-500 mt-0.5">Reste: {formatMGA(payEcolage.montantDu - payEcolage.montantPaye)}</div>
-                  : <div className="text-xs text-amber-600 mt-0.5">Aucun ecolage fini</div>}
+                  : <div className="text-xs text-amber-600 mt-0.5">Aucun ecolage defini</div>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

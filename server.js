@@ -113,12 +113,12 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
 
   const { role } = userSession;
 
-  // LOG CRITIQUE POUR LES SUPPRESSIONS
+  // MODIFICATION : On autorise le 'comptable' et l''admin' à supprimer
   if (req.method === "DELETE") {
-    console.log(`[DELETE ATTEMPT] Role: ${role}, URL: ${finalUrl}`);
-    if (role !== "admin") {
+    console.log(`[DELETE REQUEST] Role: ${role}, User: ${userSession.id}, URL: ${finalUrl}`);
+    if (role !== "admin" && role !== "comptable") {
       console.warn(`[DELETE BLOCKED] User ${userSession.id} with role ${role} tried to delete ${finalUrl}`);
-      return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
+      return res.status(403).json({ error: "Privilège Admin ou Comptable requis pour supprimer" });
     }
   }
 
@@ -132,12 +132,6 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     if (["POST", "PATCH", "PUT"].includes(req.method)) config.data = req.body;
 
     const apiRes = await axios(config);
-
-    // Si la suppression a échoué côté DB
-    if (req.method === "DELETE" && apiRes.status >= 400) {
-      console.error(`[DB DELETE FAILED] Status: ${apiRes.status}, Data:`, apiRes.data);
-    }
-
     let data = apiRes.data;
 
     // Isolation par Campus pour les non-admins (GET)
@@ -159,7 +153,7 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     }
     return res.status(apiRes.status).json(data);
   } catch (error) {
-    console.error(`[PROXY CRASH] ${req.method} ${finalUrl} :`, error.message);
+    console.error(`[PROXY ERROR] ${req.method} ${finalUrl} :`, error.message);
     return res.status(500).json({ error: error.message });
   }
 });
