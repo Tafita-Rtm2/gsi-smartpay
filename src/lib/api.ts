@@ -186,6 +186,14 @@ export async function fetchPaiements(): Promise<DBPaiement[]> {
   return apiGet<DBPaiement>("paiements");
 }
 
+/**
+ * Utile pour l'APK : récupère tous les reçus d'un étudiant spécifique par son matricule
+ */
+export async function fetchReceiptsByMatricule(matricule: string): Promise<DBPaiement[]> {
+  const all = await fetchPaiements();
+  return all.filter(p => (p.matricule || "").toLowerCase() === matricule.toLowerCase());
+}
+
 export async function createPaiement(data: Omit<DBPaiement, "id" | "_id">): Promise<DBPaiement | null> {
   const prefix = (data.campus || "GSI").slice(0, 3).toUpperCase();
   const reference = `REC-${prefix}-${Date.now().toString().slice(-6)}`;
