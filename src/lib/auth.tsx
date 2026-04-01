@@ -12,6 +12,7 @@ interface ProgramFee {
   filiere: string;
   niveau: string;
   amount: number;
+  monthlyAmount?: number;
 }
 
 interface AppState {
@@ -43,7 +44,7 @@ interface AuthContextType {
   deleteExpense: (id: string) => Promise<void>;
   myExpenses: DBExpense[];
   // Program Fees management
-  setProgramFee: (campus: Etablissement, filiere: string, amount: number, niveau: string) => Promise<void>;
+  setProgramFee: (campus: Etablissement, filiere: string, amount: number, niveau: string, monthlyAmount?: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -66,7 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAppState({
       users: staff,
       expenses: expenses,
-      programFees: fees.map(f => ({ campus: f.campus as Etablissement, filiere: f.filiere, amount: f.amount, niveau: f.niveau || "L1" }))
+      programFees: fees.map(f => ({
+        campus: f.campus as Etablissement,
+        filiere: f.filiere,
+        amount: f.amount,
+        niveau: f.niveau || "L1",
+        monthlyAmount: f.monthlyAmount
+      }))
     });
   }, []);
 
@@ -147,8 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (ok) await refreshState();
   };
 
-  const setProgramFeeInDb = async (campus: Etablissement, filiere: string, amount: number, niveau: string) => {
-    const res = await saveFee({ campus, filiere, amount, niveau });
+  const setProgramFeeInDb = async (campus: Etablissement, filiere: string, amount: number, niveau: string, monthlyAmount?: number) => {
+    const res = await saveFee({ campus, filiere, amount, niveau, monthlyAmount });
     if (res) await refreshState();
   };
 

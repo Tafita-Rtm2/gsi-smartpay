@@ -11,7 +11,7 @@ import {
   fetchStudents, fetchEcolages, fetchPaiements, fetchRequests,
   updateRequest, updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
   DBStudent, DBEcolage, DBPaiement, DBRequest,
-  getStudentId, getStudentName
+  getStudentId, getStudentName, calculateIntelligentStatus
 } from "@/lib/api";
 import clsx from "clsx";
 
@@ -131,7 +131,7 @@ export default function AdminPage() {
         const ec = ecolages.find(e => (e.id || e._id) === req.targetId);
         if (ec) {
           const newDu = req.payload.montantDu;
-          const st = ec.montantPaye >= newDu ? "paye" : ec.montantPaye > 0 ? "en_attente" : "impaye";
+          const st = calculateIntelligentStatus(ec.montantPaye, newDu, ec.montantMensuel);
           await updateEcolage(req.targetId, { montantDu: newDu, statut: st });
         }
       } else if (req.type === "delete_ecolage") {
@@ -151,7 +151,7 @@ export default function AdminPage() {
           if (ec) {
             const diff = req.payload.montant - oldP.montant;
             const newTotal = ec.montantPaye + diff;
-            const st = newTotal >= ec.montantDu ? "paye" : newTotal > 0 ? "en_attente" : "impaye";
+            const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
             await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
           }
         }
@@ -160,7 +160,7 @@ export default function AdminPage() {
         const ec = ecolages.find(e => e.etudiantId === req.payload.etudiantId);
         if (ec) {
           const newTotal = Math.max(0, ec.montantPaye - req.payload.montant);
-          const st = newTotal >= ec.montantDu ? "paye" : newTotal > 0 ? "en_attente" : "impaye";
+          const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
           await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
         }
       }

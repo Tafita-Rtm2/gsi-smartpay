@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Edit3 } from "lucide-react";
+import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Edit3, Upload, Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
+import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA, calculateIntelligentStatus } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 import clsx from "clsx";
 
@@ -43,6 +43,7 @@ export default function PaiementsPage() {
     mode:    "Especes",
     transactionRef: "",
     preuve:  "",
+    preuveFilename: "",
     note:    "",
   });
 
@@ -131,8 +132,7 @@ export default function PaiementsPage() {
     // Update ecolage
     if (ec && (ec.id || ec._id)) {
       const newPaye = ec.montantPaye + montant;
-      const newStatut: "paye"|"impaye"|"en_attente" =
-        newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+      const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
       await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
     }
 
@@ -141,7 +141,8 @@ export default function PaiementsPage() {
     setShowModal(false);
     setSelectedStudent(null);
     setStudentSearch("");
-    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "" });
+    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
+    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
   };
 
   const handleEdit = async () => {
@@ -172,8 +173,7 @@ export default function PaiementsPage() {
       if (ec && (ec.id || ec._id)) {
         const difference = newMontant - editingPaiement.montant;
         const newTotalPaye = ec.montantPaye + difference;
-        const newStatut: "paye"|"impaye"|"en_attente" =
-          newTotalPaye >= ec.montantDu ? "paye" : newTotalPaye > 0 ? "en_attente" : "impaye";
+        const newStatut = calculateIntelligentStatus(newTotalPaye, ec.montantDu, ec.montantMensuel);
         await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotalPaye, statut: newStatut });
       }
     } else {
@@ -197,7 +197,7 @@ export default function PaiementsPage() {
     setSaving(false);
     setEditingPaiement(null);
     setApprovalDesc("");
-    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "" });
+    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
   };
 
   const openEdit = (p: DBPaiement) => {
@@ -227,6 +227,7 @@ export default function PaiementsPage() {
       mode: p.mode,
       transactionRef: p.transactionRef || "",
       preuve: p.preuve || "",
+      preuveFilename: p.preuveFilename || "",
       note: noteTxt,
     });
   };
@@ -245,8 +246,7 @@ export default function PaiementsPage() {
         const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
         if (ec && (ec.id || ec._id)) {
           const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
-          const newStatut: "paye"|"impaye"|"en_attente" =
-            newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+          const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
           await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
         }
       } else {
@@ -581,18 +581,41 @@ export default function PaiementsPage() {
             </div>
 
             {form.mode !== "Especes" && (
-              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 block mb-1.5">Référence Transaction</label>
                   <input type="text" placeholder="ID de transaction" value={form.transactionRef}
                     onChange={e => setForm(f=>({...f, transactionRef: e.target.value}))}
                     className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Preuve (Lien Image)</label>
-                  <input type="text" placeholder="URL ou base64" value={form.preuve}
-                    onChange={e => setForm(f=>({...f, preuve: e.target.value}))}
-                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-600 block">Justificatif (Photo/Scan)</label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl text-slate-500 cursor-pointer hover:bg-slate-100 transition-all">
+                      <Upload size={16} />
+                      <span className="text-xs font-bold truncate max-w-[150px]">
+                        {form.preuveFilename || "Choisir un fichier"}
+                      </span>
+                      <input type="file" className="hidden" accept="image/*,application/pdf"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => setForm(f => ({ ...f, preuve: reader.result as string, preuveFilename: file.name }));
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                    </label>
+                    {form.preuve && (
+                      <button type="button" onClick={() => {
+                        const win = window.open();
+                        if (win) win.document.write(`<img src="${form.preuve}" style="max-width:100%">`);
+                      }} className="p-3 bg-brand-50 text-brand-600 rounded-xl border border-brand-100">
+                        <Eye size={18} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

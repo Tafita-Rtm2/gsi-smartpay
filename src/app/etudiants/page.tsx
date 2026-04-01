@@ -5,7 +5,7 @@ import {
   Phone, Mail, GraduationCap, CreditCard, Calendar,
   MapPin, Edit3, Trash2, AlertTriangle, Users,
   CheckCircle2, Clock, ChevronDown, Plus, Check,
-  Printer, Receipt, ArrowLeft, Download, Settings
+  Printer, Receipt, ArrowLeft, Download, Settings, FileText, Upload, Eye
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS, Etablissement } from "@/lib/data";
@@ -13,7 +13,8 @@ import {
   fetchStudents, fetchEcolages, fetchPaiements, createPaiement,
   updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
   DBStudent, DBEcolage, DBPaiement,
-  getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE
+  getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE,
+  calculateIntelligentStatus
 } from "@/lib/api";
 import clsx from "clsx";
 
@@ -53,6 +54,7 @@ export default function EtudiantsPage() {
   const [search,        setSearch]        = useState("");
   const [filiereFilter, setFiliereFilter] = useState("Toutes");
   const [statutTab,     setStatutTab]     = useState<FilterTab>("tous");
+  const [selectedNiveau, setSelectedNiveau] = useState<string>("Tous");
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Modals
@@ -72,7 +74,7 @@ export default function EtudiantsPage() {
   const [payForm, setPayForm] = useState({
     mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()),
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
-    mode: "Especes", transactionRef: "", preuve: "",
+    mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "",
   });
 
   const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
@@ -108,9 +110,10 @@ export default function EtudiantsPage() {
     const name = getStudentName(s).toLowerCase();
     const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
     const ok2 = filiereFilter === "Toutes" || normalizeString(s.filiere||"") === normalizeString(filiereFilter);
+    const ok2b = selectedNiveau === "Tous" || (s.niveau || "L1") === selectedNiveau;
     const ec = getEcolage(s);
     const ok3 = statutTab === "tous" || (ec?.statut || "impaye") === statutTab;
-    return ok1 && ok2 && ok3;
+    return ok1 && ok2 && ok2b && ok3;
   });
 
   const countPaye    = students.filter(s => getEcolage(s)?.statut === "paye").length;
@@ -118,6 +121,21 @@ export default function EtudiantsPage() {
   const countPending = students.filter(s => getEcolage(s)?.statut === "en_attente").length;
   const totalDu    = ecolages.reduce((a,e) => a+e.montantDu, 0);
   const totalPaye2 = ecolages.reduce((a,e) => a+e.montantPaye, 0);
+
+  const calculateIntelligentStatusLocal = (paye: number, du: number, mensuel?: number) => {
+    if (paye <= 0) return "impaye";
+    if (paye >= du) return "paye";
+    if (!mensuel || mensuel <= 0) return paye > 0 ? "en_attente" : "impaye";
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const schoolMonths = [9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const monthsPassed = schoolMonths.indexOf(currentMonth) + 1;
+    const expectedSoFar = monthsPassed * mensuel;
+
+    if (paye >= expectedSoFar) return "paye";
+    return "en_attente";
+  };
 
   const openPayment = async (s: DBStudent) => {
     let ec = getEcolage(s);
@@ -143,7 +161,7 @@ export default function EtudiantsPage() {
     }
     setPayStudent(s);
     setPayEcolage(ec || null);
-    setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "" });
+    setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
   };
 
   const openEditEcolage = (ec: DBEcolage) => {
@@ -161,8 +179,7 @@ export default function EtudiantsPage() {
     const newDu = Number(ecolageForm.montantDu);
 
     if (isAdmin) {
-      const st: "paye"|"impaye"|"en_attente" =
-        editEcolage.montantPaye >= newDu ? "paye" : editEcolage.montantPaye > 0 ? "en_attente" : "impaye";
+      const st = calculateIntelligentStatusLocal(editEcolage.montantPaye, newDu, editEcolage.montantMensuel);
       await updateEcolage(id, { montantDu: newDu, statut: st });
     } else {
       const { createRequest } = await import("@/lib/api");
@@ -210,9 +227,11 @@ export default function EtudiantsPage() {
     }
     setPayForm({
       mois: m, annee: y, montant: String(p.montant), date: p.date, note: noteTxt,
-      mode: p.mode || "Especes", transactionRef: p.transactionRef || "", preuve: p.preuve || ""
+      mode: p.mode || "Especes", transactionRef: p.transactionRef || "", preuve: p.preuve || "",
+      preuveFilename: p.preuveFilename || ""
     });
   };
+
 
   const handleSavePayment = async () => {
     if (!payStudent || !payForm.montant) return;
@@ -223,11 +242,11 @@ export default function EtudiantsPage() {
     if (editingPaiement) {
       const pid = editingPaiement.id || editingPaiement._id || "";
       if (isAdmin) {
-        await updatePaiement(pid, { montant, date: payForm.date, mode: payForm.mode, transactionRef: payForm.transactionRef, preuve: payForm.preuve, note });
+        await updatePaiement(pid, { montant, date: payForm.date, mode: payForm.mode, transactionRef: payForm.transactionRef, preuve: payForm.preuve, preuveFilename: payForm.preuveFilename, note });
         if (payEcolage && (payEcolage.id || payEcolage._id)) {
           const diff = montant - editingPaiement.montant;
           const newPaye = payEcolage.montantPaye + diff;
-          const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+          const st = calculateIntelligentStatusLocal(newPaye, payEcolage.montantDu, payEcolage.montantMensuel);
           await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
         }
       } else {
@@ -251,12 +270,12 @@ export default function EtudiantsPage() {
         matricule: payStudent.matricule, campus: payStudent.campus || currentUser?.etablissement || "",
         filiere: payStudent.filiere || "", classe: payStudent.niveau || "L1",
         montant, date: payForm.date, mode: payForm.mode,
-        transactionRef: payForm.transactionRef, preuve: payForm.preuve,
+        transactionRef: payForm.transactionRef, preuve: payForm.preuve, preuveFilename: payForm.preuveFilename,
         agentId: currentUser?.id || "", agentNom: `${currentUser?.prenom||""} ${currentUser?.nom||""}`.trim(), note,
       });
       if (payEcolage && (payEcolage.id || payEcolage._id)) {
         const newPaye = payEcolage.montantPaye + montant;
-        const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+        const st = calculateIntelligentStatusLocal(newPaye, payEcolage.montantDu, payEcolage.montantMensuel);
         await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
       }
     }
@@ -278,10 +297,12 @@ export default function EtudiantsPage() {
       if (config && config.amount > 0) {
         const ec = getEcolage(s);
         if (ec) {
-          // Update existing
-          const st: "paye"|"impaye"|"en_attente" =
-            ec.montantPaye >= config.amount ? "paye" : ec.montantPaye > 0 ? "en_attente" : "impaye";
-          await updateEcolage(ec.id || ec._id || "", { montantDu: config.amount, statut: st });
+            const st = calculateIntelligentStatusLocal(ec.montantPaye, config.amount, config.monthlyAmount);
+            await updateEcolage(ec.id || ec._id || "", {
+              montantDu: config.amount,
+              montantMensuel: config.monthlyAmount,
+              statut: st
+            });
         } else {
           // Create new
           await createEcolage({
@@ -368,9 +389,7 @@ export default function EtudiantsPage() {
         const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
         if (ec && (ec.id || ec._id)) {
           const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
-          const st: "paye"|"impaye"|"en_attente" =
-            newPaye <= 0 ? "impaye" :
-            newPaye >= ec.montantDu ? "paye" : "en_attente";
+          const st = calculateIntelligentStatusLocal(newPaye, ec.montantDu, ec.montantMensuel);
           await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
         }
       } else {
@@ -404,6 +423,24 @@ export default function EtudiantsPage() {
         {s.photo ? <img src={s.photo} alt={name} className="w-full h-full object-cover" /> : initials}
       </div>
     );
+  };
+
+  const getStudentEcolageWithFallbacks = (s: DBStudent) => {
+    const ec = getEcolage(s);
+    if (ec) return ec;
+
+    // Virtual ecolage for display if not created yet
+    const config = appState.programFees.find(p =>
+      p.campus === (s.campus?.toLowerCase() || "") &&
+      normalizeString(p.filiere) === normalizeString(s.filiere||"") &&
+      p.niveau === (s.niveau || "L1")
+    );
+    return {
+      montantDu: config?.amount || 0,
+      montantPaye: 0,
+      statut: "impaye" as const,
+      montantMensuel: config?.monthlyAmount || 0
+    };
   };
 
   const STAT_TABS: { id: FilterTab; label: string; count: number; color: string; border: string; icon: React.ElementType }[] = [
@@ -498,15 +535,28 @@ export default function EtudiantsPage() {
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"><X size={14} /></button>}
         </div>
         {!isAdmin && filieres.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-0.5">
-            {["Toutes",...filieres].map(f => (
-              <button key={f} onClick={() => setFiliereFilter(f)}
-                className={clsx("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap",
-                  filiereFilter===f ? "text-white border-transparent shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}
-                style={filiereFilter===f ? {background:etabColor} : {}}>
-                {f==="Toutes" ? "Toutes" : f.length>24 ? f.slice(0,24)+"…" : f}
-              </button>
-            ))}
+          <div className="space-y-2 pb-0.5">
+            <div className="flex gap-2 overflow-x-auto">
+              {["Toutes",...filieres].map(f => (
+                <button key={f} onClick={() => { setFiliereFilter(f); setSelectedNiveau("Tous"); }}
+                  className={clsx("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap",
+                    filiereFilter===f ? "text-white border-transparent shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}
+                  style={filiereFilter===f ? {background:etabColor} : {}}>
+                  {f==="Toutes" ? "Toutes" : f.length>24 ? f.slice(0,24)+"…" : f}
+                </button>
+              ))}
+            </div>
+            {filiereFilter !== "Toutes" && (
+              <div className="flex gap-2 overflow-x-auto animate-in fade-in slide-in-from-left-2">
+                {["Tous", "L1", "L2", "L3", "M1", "M2"].map(niv => (
+                  <button key={niv} onClick={() => setSelectedNiveau(niv)}
+                    className={clsx("shrink-0 px-4 py-1 rounded-lg text-[10px] font-black uppercase transition-all border",
+                      selectedNiveau===niv ? "bg-slate-900 text-white border-slate-900" : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100")}>
+                    {niv}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div className="flex items-center justify-between text-xs text-slate-400">
@@ -543,8 +593,8 @@ export default function EtudiantsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {filtered.map(s => {
-                    const ec = getEcolage(s);
-                    const statut = ec?.statut || "impaye";
+                    const ec = getStudentEcolageWithFallbacks(s);
+                    const statut = ec.statut;
                     return (
                       <tr key={getStudentId(s)} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-4 py-3">
@@ -564,7 +614,7 @@ export default function EtudiantsPage() {
                           {s.niveau && <span className="bg-brand-50 text-brand-700 text-xs font-bold px-2 py-0.5 rounded-full">{s.niveau}</span>}
                         </td>
                         <td className="px-4 py-3 min-w-[150px]">
-                          {ec && ec.montantDu > 0 ? (
+                          {ec.montantDu > 0 ? (
                             <div className="text-xs space-y-0.5">
                               <div className="font-semibold text-slate-700">Total: {formatMGA(ec.montantDu)}</div>
                               <div className="text-emerald-600">Paye: {formatMGA(ec.montantPaye)}</div>
@@ -620,8 +670,8 @@ export default function EtudiantsPage() {
             {/* Mobile */}
             <div className="md:hidden divide-y divide-slate-100">
               {filtered.map(s => {
-                const ec = getEcolage(s);
-                const statut = ec?.statut || "impaye";
+                const ec = getStudentEcolageWithFallbacks(s);
+                const statut = ec.statut;
                 return (
                   <div key={getStudentId(s)} className="p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -637,7 +687,7 @@ export default function EtudiantsPage() {
                       </span>
                     </div>
                     {s.filiere && <div className="text-xs text-slate-500 truncate">{s.filiere}</div>}
-                    {ec && ec.montantDu > 0 && (
+                    {ec.montantDu > 0 && (
                       <div className="flex flex-wrap gap-3 text-xs">
                         <span className="text-slate-500">Total: <span className="font-bold text-slate-700">{formatMGA(ec.montantDu)}</span></span>
                         <span className="text-emerald-600 font-bold">{formatMGA(ec.montantPaye)} paye</span>
@@ -681,8 +731,8 @@ export default function EtudiantsPage() {
 
       {/* ─── PROFILE MODAL with tabs: Info + Historique ─── */}
       {profileStudent && (() => {
-        const ec = getEcolage(profileStudent);
-        const statut = ec?.statut || "impaye";
+        const ec = getStudentEcolageWithFallbacks(profileStudent);
+        const statut = ec.statut;
         const name = getStudentName(profileStudent);
         const initials = name.split(" ").map(n=>n[0]||"").join("").slice(0,2).toUpperCase();
         const pays = getStudentPaiements(profileStudent);
@@ -749,17 +799,17 @@ export default function EtudiantsPage() {
                       <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Ecolage</span>
                         <div className="flex gap-2">
-                          {ec && (
-                            <button onClick={() => { openEditEcolage(ec); setProfileStudent(null); }}
+                          {getEcolage(profileStudent) && (
+                            <button onClick={() => { openEditEcolage(getEcolage(profileStudent)!); setProfileStudent(null); }}
                               className="text-xs text-amber-600 flex items-center gap-0.5 hover:underline"><Edit3 size={11} /> Modifier</button>
                           )}
-                          {ec && ec.montantDu > 0 && (
-                            <button onClick={() => { setDeleteEcolageObj(ec); setProfileStudent(null); }}
+                          {ec.montantDu > 0 && getEcolage(profileStudent) && (
+                            <button onClick={() => { setDeleteEcolageObj(getEcolage(profileStudent)!); setProfileStudent(null); }}
                               className="text-xs text-red-500 flex items-center gap-0.5 hover:underline"><Trash2 size={11} /> Supprimer</button>
                           )}
                         </div>
                       </div>
-                      {ec && ec.montantDu > 0 ? (
+                      {ec.montantDu > 0 ? (
                         <div className="px-4 py-3 grid grid-cols-3 gap-3 text-center">
                           {[
                             { label: "Total du", value: formatMGA(ec.montantDu), color: "text-slate-700" },

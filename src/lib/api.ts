@@ -39,6 +39,7 @@ export interface DBEcolage {
   filiere: string;
   classe: string;
   montantDu: number;
+  montantMensuel?: number;
   montantPaye: number;
   statut: "paye" | "impaye" | "en_attente";
   annee?: string;
@@ -61,6 +62,7 @@ export interface DBPaiement {
   mode: string;
   transactionRef?: string;
   preuve?: string;
+  preuveFilename?: string;
   agentId: string;
   agentNom: string;
   note?: string;
@@ -123,6 +125,7 @@ export interface DBFee {
   filiere: string;
   niveau: string;
   amount: number;
+  monthlyAmount?: number;
 }
 
 function parseArray<T>(data: Record<string, unknown> | unknown[]): T[] {
@@ -331,4 +334,32 @@ export function getStudentCampus(s: DBStudent): string {
 }
 export function formatMGA(amount: number): string {
   return new Intl.NumberFormat("fr-MG").format(amount) + " Ar";
+}
+
+/**
+ * Calcule l'état du paiement de l'écolage en fonction du montant payé, du total dû et du montant mensuel.
+ * Si le montant payé est supérieur ou égal au montant attendu pour le mois de l'année scolaire en cours (Oct-Sep),
+ * l'étudiant est marqué comme "paye" pour le moment, sinon "en_attente".
+ */
+export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
+  if (paye <= 0) return "impaye";
+  if (paye >= du) return "paye";
+
+  // Si on n'a pas de montant mensuel, on reste en "en_attente" s'il a déjà payé quelque chose
+  if (!mensuel || mensuel <= 0) return paye > 0 ? "en_attente" : "impaye";
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+
+  // Année scolaire type GSI : Octobre (9) à Septembre (8)
+  const schoolMonths = [9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const monthsPassed = schoolMonths.indexOf(currentMonth) + 1;
+
+  // Si le mois n'est pas dans le cycle scolaire normal, on considère qu'on attend tout
+  if (monthsPassed <= 0) return "en_attente";
+
+  const expectedSoFar = monthsPassed * mensuel;
+
+  if (paye >= expectedSoFar) return "paye";
+  return "en_attente";
 }

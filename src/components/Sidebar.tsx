@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Users, CreditCard, BookOpen, FileText, Receipt, LogOut, Menu, X, GraduationCap } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
+import { fetchRequests } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 import clsx from "clsx";
 
@@ -23,6 +24,15 @@ export default function Sidebar() {
   const router = useRouter();
   const { currentUser, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (currentUser?.role === "admin") {
+      fetchRequests().then(res => {
+        setPendingCount(res.filter(r => r.status === "pending").length);
+      }).catch(() => {});
+    }
+  }, [currentUser]);
 
   const handleLogout = () => { logout(); router.push("/"); };
 
@@ -32,14 +42,20 @@ export default function Sidebar() {
 
   const NavLinks = () => (
     <nav className="flex flex-col gap-0.5 flex-1">
-      {NAV.filter(item => !item.adminOnly || currentUser?.role === "admin").map(({ href, label, icon: Icon }) => {
+      {NAV.filter(item => !item.adminOnly || currentUser?.role === "admin").map(({ href, label, icon: Icon, adminOnly }) => {
         const active = pathname.startsWith(href);
         return (
           <Link key={href} href={href} onClick={() => setOpen(false)}
             className={clsx("flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
               active ? "bg-brand-600 text-white shadow-md shadow-brand-600/30"
                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-800")}>
-            <Icon size={17} /><span>{label}</span>
+            <Icon size={17} />
+            <span className="flex-1">{label}</span>
+            {adminOnly && pendingCount > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm animate-pulse">
+                {pendingCount}
+              </span>
+            )}
           </Link>
         );
       })}

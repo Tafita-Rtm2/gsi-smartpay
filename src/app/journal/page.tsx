@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw, Edit3, Trash2 } from "lucide-react";
+import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw, Edit3, Trash2, Download, Printer, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fetchPaiements, DBPaiement, DBExpense, formatMGA } from "@/lib/api";
+import clsx from "clsx";
 import { ETABLISSEMENTS } from "@/lib/data";
 
 const CATEGORIES = ["Toutes", "Charges", "Materiel", "RH", "Autre"];
@@ -17,6 +18,7 @@ export default function JournalPage() {
   const [filterMonth, setFilterMonth] = useState(["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][new Date().getMonth()]);
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [filterType, setFilterType] = useState<"jour" | "mois" | "annee">("mois");
+  const [selectedNiveaux, setSelectedNiveaux] = useState<string[]>([]);
   const [catFilter, setCatFilter] = useState("Toutes");
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<DBExpense | null>(null);
@@ -41,9 +43,13 @@ export default function JournalPage() {
   useEffect(() => { load(); }, [load]);
 
   const filteredPaiements = paiements.filter(p => {
-    if (filterType === "jour") return p.date === filterDate;
-    if (filterType === "mois") return p.note?.includes(filterMonth) && p.note?.includes(filterYear);
-    return p.note?.includes(filterYear);
+    let matchTime = false;
+    if (filterType === "jour") matchTime = p.date === filterDate;
+    else if (filterType === "mois") matchTime = !!(p.note?.includes(filterMonth) && p.note?.includes(filterYear));
+    else matchTime = !!p.note?.includes(filterYear);
+
+    const matchNiveau = selectedNiveaux.length === 0 || selectedNiveaux.includes(p.classe || "");
+    return matchTime && matchNiveau;
   });
 
   const filteredExpenses = myExpenses.filter(e => {
@@ -92,14 +98,35 @@ export default function JournalPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Journal Financier</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Recettes et depenses</p>
+          <p className="text-sm text-slate-500 mt-0.5">Suivi des flux de trésorerie</p>
         </div>
-        <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-sm transition-colors">
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => {
+            const headers = ["Date", "Type", "Libellé", "Catégorie", "Montant", "Agent"];
+            const pRows = filteredPaiements.map(p => [p.date, "Recette", `Paiement ${p.etudiantNom}`, "Ecolage", p.montant, p.agentNom]);
+            const eRows = filteredExpenses.map(e => [e.date, "Dépense", e.libelle, e.categorie, e.montant, e.agentNom]);
+            const rows = [...pRows, ...eRows].sort((a,b) => String(b[0]).localeCompare(String(a[0])));
+            const csv = "\uFEFF" + [headers, ...rows].map(r => r.join(";")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `journal_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50">
+            <Download size={15} /> Excel
+          </button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50">
+            <Printer size={15} /> Imprimer
+          </button>
+          <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm transition-colors">
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -133,47 +160,66 @@ export default function JournalPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit shrink-0">
-          {(["recettes", "depenses"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-              style={tab === t ? { color: etabColor } : {}}>
-              {t === "recettes" ? "Journal des Recettes" : "Journal des Depenses"}
-            </button>
-          ))}
-        </div>
+      <div className="card space-y-4">
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit shrink-0">
+            {(["recettes", "depenses"] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                style={tab === t ? { color: etabColor } : {}}>
+                {t === "recettes" ? "Journal des Recettes" : "Journal des Depenses"}
+              </button>
+            ))}
+          </div>
 
-        <div className="flex gap-2 w-full md:w-auto">
-          <select value={filterType} onChange={e => setFilterType(e.target.value as any)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
-            <option value="jour">Par Jour</option>
-            <option value="mois">Par Mois</option>
-            <option value="annee">Par Année</option>
-          </select>
-          {filterType === "jour" && (
-            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none" />
-          )}
-          {filterType === "mois" && (
-            <>
-              <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
-                {["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"].map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
+          <div className="flex gap-2 w-full md:w-auto">
+            <select value={filterType} onChange={e => setFilterType(e.target.value as any)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+              <option value="jour">Par Jour</option>
+              <option value="mois">Par Mois</option>
+              <option value="annee">Par Année</option>
+            </select>
+            {filterType === "jour" && (
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none" />
+            )}
+            {filterType === "mois" && (
+              <>
+                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                  {["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"].map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                  {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            )}
+            {filterType === "annee" && (
               <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
                 className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
                 {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-            </>
-          )}
-          {filterType === "annee" && (
-            <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
-              {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          )}
+            )}
+          </div>
         </div>
+
+        {tab === "recettes" && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+            <span className="text-[10px] font-black text-slate-400 uppercase mr-2 flex items-center">Niveaux :</span>
+            {["L1", "L2", "L3", "M1", "M2"].map(n => (
+              <button key={n}
+                onClick={() => setSelectedNiveaux(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])}
+                className={clsx("px-3 py-1 rounded-lg text-[10px] font-black transition-all border",
+                  selectedNiveaux.includes(n) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
+                {n}
+              </button>
+            ))}
+            {selectedNiveaux.length > 0 && (
+              <button onClick={() => setSelectedNiveaux([])} className="text-[10px] font-black text-brand-600 hover:underline ml-2 uppercase">Réinitialiser</button>
+            )}
+          </div>
+        )}
       </div>
 
       {tab === "recettes" && (
