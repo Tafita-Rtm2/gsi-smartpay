@@ -150,8 +150,8 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-        <p className="text-center text-slate-400 text-xs mt-8">
-          © 2025 Groupe GSI · Système de gestion sécurisé
+        <p className="text-center text-slate-400 text-xs mt-8 font-medium">
+          © 2026 Groupe GSI SmartPay · Système de gestion universitaire ultra intelligent
         </p>
       </div>
 

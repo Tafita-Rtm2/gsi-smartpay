@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle } from "lucide-react";
+import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Download, Printer, GraduationCap } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   fetchStudents, fetchOtherPayments, createOtherPayment, deleteOtherPayment,
   DBStudent, DBOtherPayment, getStudentId, getStudentName, formatMGA
 } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
+import clsx from "clsx";
 
 export default function AutresPaiementsPage() {
   const { currentUser } = useAuth();
@@ -14,6 +15,14 @@ export default function AutresPaiementsPage() {
   const [payments, setPayments] = useState<DBOtherPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [timeScale, setTimeScale] = useState<"jour" | "mois" | "annee">("mois");
+
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]);
+  const [filterMonth, setFilterMonth] = useState(["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][new Date().getMonth()]);
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const [filterType, setFilterType] = useState<"jour" | "mois" | "annee">("mois");
+  const [selectedNiveaux, setSelectedNiveaux] = useState<string[]>([]);
+
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -29,7 +38,7 @@ export default function AutresPaiementsPage() {
     libelle: "",
     montant: "",
     date: new Date().toISOString().split("T")[0],
-    mode: "",
+    mode: "Especes",
     note: "",
   });
 
@@ -55,7 +64,22 @@ export default function AutresPaiementsPage() {
 
   const filtered = payments.filter(p => {
     const q = search.toLowerCase();
-    return (p.etudiantNom || "").toLowerCase().includes(q) || (p.libelle || "").toLowerCase().includes(q);
+    const matchSearch = (p.etudiantNom || "").toLowerCase().includes(q) || (p.libelle || "").toLowerCase().includes(q);
+
+    let matchTime = false;
+    if (filterType === "jour") {
+      matchTime = p.date === filterDate;
+    } else if (filterType === "mois") {
+      const d = new Date(p.date);
+      const moisFr = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][d.getMonth()];
+      matchTime = moisFr === filterMonth && String(d.getFullYear()) === filterYear;
+    } else {
+      matchTime = p.date.startsWith(filterYear);
+    }
+
+    const matchNiveau = selectedNiveaux.length === 0 || selectedNiveaux.includes(p.classe || "");
+
+    return matchSearch && matchTime && matchNiveau;
   });
 
   const filteredStudents = students.filter(s => {
@@ -68,8 +92,6 @@ export default function AutresPaiementsPage() {
     if (!selectedStudent) { setFormError("Sélectionnez un étudiant"); return; }
     if (!form.libelle) { setFormError("Libellé requis"); return; }
     if (!form.montant || Number(form.montant) <= 0) { setFormError("Montant invalide"); return; }
-    if (!form.mode) { setFormError("Mode de paiement requis"); return; }
-
     setSaving(true);
     await createOtherPayment({
       etudiantId: getStudentId(selectedStudent),
@@ -108,22 +130,87 @@ export default function AutresPaiementsPage() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Autres Paiements</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{loading ? "Chargement..." : `${payments.length} paiements`}</p>
+          <h1 className="text-2xl font-bold text-slate-900 font-black tracking-tight">Autres Paiements</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Encaissements hors-écolage</p>
         </div>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md transition-colors"
-          style={{ background: etabColor }}>
-          <Plus size={16} /> Nouveau paiement
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => {
+            const headers = ["Étudiant", "Matricule", "Libellé", "Montant", "Date", "Mode", "Agent"];
+            const rows = filtered.map(p => [p.etudiantNom, p.matricule, p.libelle, p.montant, p.date, p.mode, p.agentNom]);
+            const csv = "\uFEFF" + [headers, ...rows].map(r => r.join(";")).join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const link = document.body.appendChild(document.createElement("a"));
+            link.href = URL.createObjectURL(blob);
+            link.download = `autres_paiements_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+            document.body.removeChild(link);
+          }} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:bg-slate-50">
+            <Download size={14} /> Excel
+          </button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all hover:bg-slate-50">
+            <Printer size={14} /> Imprimer
+          </button>
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg transition-all hover:scale-[1.02]"
+            style={{ background: etabColor }}>
+            <Plus size={16} /> Nouveau paiement
+          </button>
+        </div>
       </div>
 
-      <div className="card">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Rechercher par étudiant ou libellé..." value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+      <div className="card space-y-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Rechercher un paiement..." value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-100 bg-slate-50/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+          </div>
+          <div className="flex gap-2">
+            <select value={filterType} onChange={e => setFilterType(e.target.value as any)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-600">
+              <option value="jour">Jour</option>
+              <option value="mois">Mois</option>
+              <option value="annee">Année</option>
+            </select>
+            {filterType === "jour" && (
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none" />
+            )}
+            {filterType === "mois" && (
+              <>
+                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-700">
+                  {["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"].map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-700">
+                  {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            )}
+            {filterType === "annee" && (
+              <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-700">
+                {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+          <span className="text-[10px] font-black text-slate-400 uppercase mr-2 flex items-center">Filtrer par niveau :</span>
+          {["L1", "L2", "L3", "M1", "M2"].map(n => (
+            <button key={n}
+              onClick={() => setSelectedNiveaux(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])}
+              className={clsx("px-4 py-1.5 rounded-xl text-[10px] font-black transition-all border uppercase",
+                selectedNiveaux.includes(n) ? "bg-brand-600 text-white border-brand-600 shadow-md" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
+              {n}
+            </button>
+          ))}
+          {selectedNiveaux.length > 0 && (
+            <button onClick={() => setSelectedNiveaux([])} className="text-[10px] font-black text-brand-600 hover:underline ml-2 uppercase tracking-tight">Réinitialiser</button>
+          )}
         </div>
       </div>
 
@@ -214,10 +301,16 @@ export default function AutresPaiementsPage() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Mode de paiement (Saisie libre)</label>
-              <input type="text" placeholder="Ex: Espèces, Virement, Mvola..." value={form.mode}
-                onChange={e => setForm({...form, mode: e.target.value})}
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1.5 tracking-widest">Mode de paiement</label>
+              <div className="grid grid-cols-2 gap-2">
+                {["Especes", "Banque", "Mvola", "Airtel Money", "Orange Money"].map(m => (
+                  <button key={m} type="button" onClick={() => setForm(f => ({ ...f, mode: m }))}
+                    className={clsx("px-3 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-tight",
+                      form.mode === m ? "bg-brand-600 text-white border-brand-600 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {formError && <p className="text-red-500 text-xs">{formError}</p>}

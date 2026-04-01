@@ -64,7 +64,13 @@ export default function EtudiantsPage() {
   const [payStudent,      setPayStudent]      = useState<DBStudent | null>(null);
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
+
   const [showConfig,      setShowConfig]      = useState(false);
+  const [bulkAmount,      setBulkAmount]      = useState("");
+  const [bulkMonthly,     setBulkMonthly]     = useState("");
+  const [selectedConfigLevels, setSelectedConfigLevels] = useState<string[]>(["L1", "L2", "L3", "M1", "M2"]);
+  const [activeConfigFiliere, setActiveConfigFiliere] = useState("");
+
   const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
   const [deleteEcolageObj, setDeleteEcolageObj] = useState<DBEcolage | null>(null);
   const [deletePaiementObj, setDeletePaiementObj] = useState<DBPaiement | null>(null);
@@ -100,7 +106,7 @@ export default function EtudiantsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const getEcolage = (s: DBStudent) => ecolages.find(e => e.etudiantId === getStudentId(s));
+  const getEcolage = useCallback((s: DBStudent) => ecolages.find(e => e.etudiantId === getStudentId(s)), [ecolages]);
   const getStudentPaiements = (s: DBStudent) =>
     allPaiements.filter(p => p.etudiantId === getStudentId(s))
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -111,16 +117,42 @@ export default function EtudiantsPage() {
     const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
     const ok2 = filiereFilter === "Toutes" || normalizeString(s.filiere||"") === normalizeString(filiereFilter);
     const ok2b = selectedNiveau === "Tous" || (s.niveau || "L1") === selectedNiveau;
-    const ec = getEcolage(s);
-    const ok3 = statutTab === "tous" || (ec?.statut || "impaye") === statutTab;
+    const ec = getEffectiveEcolage(s);
+    const ok3 = statutTab === "tous" || ec.statut === statutTab;
     return ok1 && ok2 && ok2b && ok3;
   });
 
-  const countPaye    = students.filter(s => getEcolage(s)?.statut === "paye").length;
-  const countImpaye  = students.filter(s => !getEcolage(s) || getEcolage(s)?.statut === "impaye").length;
-  const countPending = students.filter(s => getEcolage(s)?.statut === "en_attente").length;
+  const countPaye    = students.filter(s => getEffectiveEcolage(s).statut === "paye").length;
+  const countImpaye  = students.filter(s => getEffectiveEcolage(s).statut === "impaye").length;
+  const countPending = students.filter(s => getEffectiveEcolage(s).statut === "en_attente").length;
   const totalDu    = ecolages.reduce((a,e) => a+e.montantDu, 0);
   const totalPaye2 = ecolages.reduce((a,e) => a+e.montantPaye, 0);
+
+  const getEffectiveEcolage = useCallback((s: DBStudent): DBEcolage => {
+    const realEc = getEcolage(s);
+    if (realEc) {
+      const intelligentStatut = calculateIntelligentStatus(realEc.montantPaye, realEc.montantDu, realEc.montantMensuel);
+      return { ...realEc, statut: intelligentStatut };
+    }
+
+    const config = appState.programFees.find(p =>
+      p.campus === (s.campus?.toLowerCase() || "") &&
+      normalizeString(p.filiere) === normalizeString(s.filiere||"") &&
+      p.niveau === (s.niveau || "L1")
+    );
+    return {
+      etudiantId: getStudentId(s),
+      etudiantNom: getStudentName(s),
+      matricule: s.matricule,
+      campus: s.campus || "",
+      filiere: s.filiere || "",
+      classe: s.niveau || "L1",
+      montantDu: config?.amount || 0,
+      montantPaye: 0,
+      statut: "impaye",
+      montantMensuel: config?.monthlyAmount || 0
+    };
+  }, [appState.programFees, getEcolage]);
 
   const calculateIntelligentStatusLocal = (paye: number, du: number, mensuel?: number) => {
     if (paye <= 0) return "impaye";
@@ -284,27 +316,44 @@ export default function EtudiantsPage() {
 
 
 
-  const handleApplyConfig = async () => {
+  const handleBulkApplyConfig = () => {
+    if ((!bulkAmount || Number(bulkAmount) <= 0) && (!bulkMonthly || Number(bulkMonthly) <= 0)) return;
+    const fil = activeConfigFiliere || filieres[0];
+    selectedConfigLevels.forEach(lvl => {
+      const existing = appState.programFees.find(f => f.campus === currentUser!.etablissement && f.filiere === fil && f.niveau === lvl);
+      const newDu = bulkAmount ? Number(bulkAmount) : (existing?.amount || 0);
+      const newMensuel = bulkMonthly ? Number(bulkMonthly) : (existing?.monthlyAmount || 0);
+      setProgramFee(currentUser!.etablissement, fil, newDu, lvl, newMensuel);
+    });
+    setBulkAmount("");
+    setBulkMonthly("");
+  };
+
+  const handleApplyConfigToAll = async () => {
     if (!currentUser) return;
     setSaving(true);
     const { createEcolage, updateEcolage } = await import("@/lib/api");
-
-    // For each student in this campus
     const myEtab = currentUser.etablissement;
 
-    for (const s of filtered) {
-      const config = appState.programFees.find(p => p.campus === myEtab && normalizeString(p.filiere) === normalizeString(s.filiere||"") && p.niveau === (s.niveau || "L1"));
+    // We process all students of the campus, not just filtered ones
+    const campusStudents = students.filter(s => (s.campus || "").toLowerCase().includes(myEtab));
+
+    for (const s of campusStudents) {
+      const config = appState.programFees.find(p =>
+        p.campus === myEtab &&
+        normalizeString(p.filiere) === normalizeString(s.filiere||"") &&
+        p.niveau === (s.niveau || "L1")
+      );
       if (config && config.amount > 0) {
         const ec = getEcolage(s);
         if (ec) {
-            const st = calculateIntelligentStatusLocal(ec.montantPaye, config.amount, config.monthlyAmount);
-            await updateEcolage(ec.id || ec._id || "", {
-              montantDu: config.amount,
-              montantMensuel: config.monthlyAmount,
-              statut: st
-            });
+          const st = calculateIntelligentStatusLocal(ec.montantPaye, config.amount, config.monthlyAmount);
+          await updateEcolage(ec.id || ec._id || "", {
+            montantDu: config.amount,
+            montantMensuel: config.monthlyAmount,
+            statut: st
+          });
         } else {
-          // Create new
           await createEcolage({
             etudiantId: getStudentId(s),
             etudiantNom: getStudentName(s),
@@ -313,6 +362,7 @@ export default function EtudiantsPage() {
             filiere: s.filiere || "",
             classe: s.niveau || "L1",
             montantDu: config.amount,
+            montantMensuel: config.monthlyAmount,
             montantPaye: 0,
             statut: "impaye",
             annee: "2025/2026",
@@ -323,6 +373,7 @@ export default function EtudiantsPage() {
     await load();
     setSaving(false);
     setShowConfig(false);
+    alert("Configuration appliquée à tous les étudiants.");
   };
 
   const handlePrint = (id: string) => {
@@ -600,7 +651,7 @@ export default function EtudiantsPage() {
                 <tbody className="divide-y divide-slate-50">
                   {filtered.map(s => {
                     const realEc = getEcolage(s);
-                    const ec = getStudentEcolageWithFallbacks(s);
+                    const ec = getEffectiveEcolage(s);
                     const statut = ec.statut;
                     return (
                       <tr key={getStudentId(s)} className="hover:bg-slate-50/60 transition-colors">
@@ -678,7 +729,7 @@ export default function EtudiantsPage() {
             <div className="md:hidden divide-y divide-slate-100">
               {filtered.map(s => {
                 const realEc = getEcolage(s);
-                const ec = getStudentEcolageWithFallbacks(s);
+                const ec = getEffectiveEcolage(s);
                 const statut = ec.statut;
                 return (
                   <div key={getStudentId(s)} className="p-4 space-y-2">
@@ -739,7 +790,7 @@ export default function EtudiantsPage() {
 
       {/* ─── PROFILE MODAL with tabs: Info + Historique ─── */}
       {profileStudent && (() => {
-        const ec = getStudentEcolageWithFallbacks(profileStudent);
+        const ec = getEffectiveEcolage(profileStudent);
         const statut = ec.statut;
         const name = getStudentName(profileStudent);
         const initials = name.split(" ").map(n=>n[0]||"").join("").slice(0,2).toUpperCase();
@@ -1063,18 +1114,41 @@ export default function EtudiantsPage() {
             </div>
 
             {payForm.mode !== "Especes" && (
-              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Réf. Transaction</label>
-                  <input type="text" placeholder="ID..." value={payForm.transactionRef}
+                  <input type="text" placeholder="ID de transaction..." value={payForm.transactionRef}
                     onChange={e => setPayForm(f=>({...f, transactionRef: e.target.value}))}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
                 </div>
+
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Preuve (URL)</label>
-                  <input type="text" placeholder="http..." value={payForm.preuve}
-                    onChange={e => setPayForm(f=>({...f, preuve: e.target.value}))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Justificatif (Capture/Direct)</label>
+                  <div className="flex gap-2">
+                    <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-50 border-2 border-dashed border-brand-200 rounded-xl text-brand-600 cursor-pointer hover:bg-brand-50 transition-all shadow-sm">
+                      <Upload size={14} />
+                      <span className="text-[10px] font-bold truncate max-w-[150px]">
+                        {payForm.preuveFilename || "Uploader / Photo"}
+                      </span>
+                      <input type="file" className="hidden" accept="image/*" capture="environment"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => setPayForm(f => ({ ...f, preuve: reader.result as string, preuveFilename: file.name }));
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                    </label>
+                    {payForm.preuve && (
+                      <button type="button" onClick={() => {
+                        const win = window.open();
+                        if (win) win.document.write(`<img src="${payForm.preuve}" style="max-width:100%">`);
+                      }} className="p-2 bg-brand-50 text-brand-600 rounded-xl border border-brand-100">
+                        <Eye size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1131,62 +1205,109 @@ export default function EtudiantsPage() {
       )}
 
       {/* ─── CONFIGURATION MODAL ─── */}
-      {showConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Configuration des Écolages</h2>
-                <p className="text-xs text-slate-400">Définissez les montants par filière pour {etabInfo?.label}</p>
+      {showConfig && (() => {
+        const currentFiliere = activeConfigFiliere || filieres[0];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl p-8 flex gap-8 h-[85vh]">
+              {/* Sidebar: Filieres */}
+              <div className="w-64 flex flex-col gap-2 overflow-y-auto pr-4 border-r border-slate-100">
+                <h3 className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Secteurs</h3>
+                {filieres.map(f => (
+                  <button key={f} onClick={() => setActiveConfigFiliere(f)}
+                    className={clsx("text-left px-4 py-3 rounded-xl text-xs font-bold transition-all",
+                      currentFiliere === f ? "bg-brand-600 text-white shadow-lg shadow-brand-600/20" : "text-slate-500 hover:bg-slate-50")}>
+                    {f}
+                  </button>
+                ))}
               </div>
-              <button onClick={() => setShowConfig(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
-            </div>
 
-            <div className="max-h-[50vh] overflow-y-auto space-y-6 pr-2">
-              {filieres.map(f => (
-                <div key={f} className="space-y-2 border-b border-slate-100 pb-4 last:border-0">
-                  <div className="text-sm font-black text-slate-900 uppercase">{f}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["L1", "L2", "L3", "M1", "M2"].map(niv => {
-                      const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === f && p.niveau === niv);
-                      return (
-                        <div key={niv} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                          <span className="text-[10px] font-bold text-slate-400 w-6">{niv}</span>
-                          <div className="relative flex-1">
-                            <input type="number" placeholder="0"
-                              value={config?.amount || ""}
-                              onChange={e => setProgramFee(currentUser!.etablissement, f, Number(e.target.value), niv)}
-                              className="w-full pl-2 pr-6 py-1.5 text-xs border border-slate-200 rounded focus:outline-none" />
-                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400">Ar</span>
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* Main Content */}
+              <div className="flex-1 flex flex-col min-w-0">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">Plafonds d&apos;écolage</h2>
+                    <p className="text-sm text-slate-400 mt-1">{currentFiliere}</p>
+                  </div>
+                  <button onClick={() => setShowConfig(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-50 text-slate-400 hover:text-red-500">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Bulk Tool */}
+                <div className="bg-brand-50 border border-brand-100 rounded-2xl p-5 mb-6">
+                  <div className="text-[10px] font-black uppercase text-brand-600 mb-3 tracking-widest">Action groupée (Ultra rapide)</div>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex gap-1 bg-white p-1 rounded-lg border border-brand-200">
+                      {["L1", "L2", "L3", "M1", "M2"].map(lvl => (
+                        <button key={lvl} onClick={() => setSelectedConfigLevels(p => p.includes(lvl) ? p.filter(x => x !== lvl) : [...p, lvl])}
+                          className={clsx("w-9 h-9 rounded-md text-[10px] font-black transition-all",
+                            selectedConfigLevels.includes(lvl) ? "bg-brand-600 text-white" : "text-slate-400 hover:bg-slate-50")}>
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 flex-1 min-w-[300px]">
+                      <div className="relative flex-1">
+                        <input type="number" placeholder="Total Annuel..." value={bulkAmount} onChange={e => setBulkAmount(e.target.value)}
+                          className="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:outline-none" />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400 uppercase">Ar</span>
+                      </div>
+                      <div className="relative flex-1">
+                        <input type="number" placeholder="Mensuel..." value={bulkMonthly} onChange={e => setBulkMonthly(e.target.value)}
+                          className="w-full pl-3 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:outline-none" />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400 uppercase">Ar</span>
+                      </div>
+                    </div>
+                    <button onClick={handleBulkApplyConfig} disabled={!bulkAmount && !bulkMonthly}
+                      className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase shadow-sm disabled:opacity-50 hover:bg-black">
+                      Remplir
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
 
-            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex gap-3">
-              <CheckCircle2 className="text-emerald-600 shrink-0" size={18} />
-              <p className="text-xs text-emerald-700 font-medium">Le montant défini ici sera le plafond à payer pour marquer un étudiant comme &quot;Payé&quot;. S&apos;il paie moins, il restera en attente ou impayé.</p>
-            </div>
+                {/* Level Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto flex-1 pr-2 pb-4">
+                  {["L1", "L2", "L3", "M1", "M2"].map(niv => {
+                    const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === currentFiliere && p.niveau === niv);
+                    return (
+                      <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all">
+                        <div className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Niveau {niv}</div>
+                        <div className="space-y-4">
+                          <div className="relative">
+                            <label className="text-[9px] font-black text-slate-400 block mb-1">TOTAL ANNUEL</label>
+                            <input type="number" placeholder="0"
+                              value={config?.amount || ""}
+                              onChange={e => setProgramFee(currentUser!.etablissement, currentFiliere, Number(e.target.value), niv, config?.monthlyAmount)}
+                              className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold focus:outline-none focus:bg-white focus:border-brand-200 transition-all" />
+                            <span className="absolute right-2 top-[24px] text-[8px] font-bold text-slate-400">Ar</span>
+                          </div>
+                          <div className="relative">
+                            <label className="text-[9px] font-black text-slate-400 block mb-1">MENSUEL PAR DÉFAUT</label>
+                            <input type="number" placeholder="0"
+                              value={config?.monthlyAmount || ""}
+                              onChange={e => setProgramFee(currentUser!.etablissement, currentFiliere, config?.amount || 0, niv, Number(e.target.value))}
+                              className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold focus:outline-none focus:bg-white focus:border-brand-200 transition-all" />
+                            <span className="absolute right-2 top-[24px] text-[8px] font-bold text-slate-400">Ar</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
-              <AlertTriangle className="text-amber-600 shrink-0" size={18} />
-              <p className="text-xs text-amber-700">Appliquer la configuration créera ou mettra à jour l&apos;écolage total de TOUS les étudiants affichés ci-dessous selon leur filière.</p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowConfig(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Fermer</button>
-              <button onClick={handleApplyConfig} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold shadow-md disabled:opacity-50 flex items-center justify-center gap-2" style={{background:etabColor}}>
-                {saving ? "Calcul..." : "Appliquer à tous"}
-              </button>
+                <div className="flex gap-4 mt-8 pt-6 border-t border-slate-100">
+                  <button onClick={() => setShowConfig(false)} className="flex-1 py-4 rounded-xl border border-slate-200 text-xs font-black uppercase text-slate-400 hover:bg-slate-50">Fermer</button>
+                  <button onClick={handleApplyConfigToAll} disabled={saving}
+                    className="flex-[2] py-4 rounded-xl bg-brand-600 text-white text-xs font-black uppercase shadow-lg shadow-brand-600/20 disabled:opacity-50 hover:scale-[1.01] transition-all">
+                    {saving ? "Calcul en cours..." : "Appliquer à TOUS les étudiants"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
 
 
