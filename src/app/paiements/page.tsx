@@ -252,7 +252,7 @@ export default function PaiementsPage() {
         type: "update_paiement",
         collection: "paiements",
         targetId: id,
-        payload: { montant: newMontant, date: form.date, mode: form.mode, transactionRef: form.transactionRef, preuve: form.preuve, note },
+        payload: { montant: newMontant, date: form.date, mode: form.mode, transactionRef: form.transactionRef, preuve: form.preuve, preuveFilename: form.preuveFilename, note },
         description: approvalDesc,
         agentId: currentUser?.id || "",
         agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
@@ -474,14 +474,6 @@ export default function PaiementsPage() {
                       <td className="px-6 py-4 font-mono text-xs font-bold text-brand-600">
                         <div className="flex items-center gap-2">
                           {p.reference || "—"}
-                          {p.preuve && (
-                            <button onClick={() => {
-                              const win = window.open();
-                              if (win) win.document.write(`<img src="${p.preuve}" style="max-width:100%">`);
-                            }} title="Voir justificatif" className="p-1 bg-brand-50 text-brand-600 rounded hover:bg-brand-100 transition-colors">
-                              <Eye size={10} />
-                            </button>
-                          )}
                         </div>
                         {p.transactionRef && <div className="text-[9px] text-slate-400 mt-0.5">Ref: {p.transactionRef}</div>}
                       </td>
@@ -489,7 +481,17 @@ export default function PaiementsPage() {
                       <td className="px-6 py-4 font-black text-emerald-700">{formatMGA(p.montant)}</td>
                       <td className="px-6 py-4 text-slate-500 text-xs font-medium">{p.date}</td>
                       <td className="px-6 py-4">
-                        <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-black uppercase text-slate-500">{p.mode}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-black uppercase text-slate-500">{p.mode}</span>
+                          {p.preuve && (
+                            <button onClick={() => {
+                              const win = window.open();
+                              if (win) win.document.write(`<body style="margin:0; background:#000; display:flex; align-items:center; justify-center"><img src="${p.preuve}" style="max-width:100%; max-height:100vh; margin:auto"></body>`);
+                            }} title="Voir justificatif" className="p-1.5 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 transition-all shadow-sm">
+                              <Eye size={12} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-slate-500 text-xs font-semibold">{p.agentNom}</td>
                       <td className="px-6 py-4">

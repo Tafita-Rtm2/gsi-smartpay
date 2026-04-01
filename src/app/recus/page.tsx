@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Receipt, Download, Search, Eye, Printer, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fetchPaiements, fetchStudents, DBPaiement, DBStudent, getStudentId, formatMGA } from "@/lib/api";
@@ -30,10 +30,14 @@ export default function RecusPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = paiements.filter(p => {
-    const q = search.toLowerCase();
-    return (p.etudiantNom || "").toLowerCase().includes(q) || (p.reference || "").toLowerCase().includes(q);
-  });
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return paiements.filter(p =>
+      (p.etudiantNom || "").toLowerCase().includes(q) ||
+      (p.reference || "").toLowerCase().includes(q) ||
+      (p.matricule || "").toLowerCase().includes(q)
+    );
+  }, [paiements, search]);
 
   return (
     <div className="space-y-5">
@@ -68,8 +72,15 @@ export default function RecusPage() {
                 </div>
                 <span className="text-xs font-mono text-slate-400">{p.reference || "—"}</span>
               </div>
-              <div className="font-bold text-slate-900 mb-0.5">{p.etudiantNom}</div>
-              <div className="text-xs text-slate-400 mb-3 truncate">{p.filiere || ""} {p.classe ? `· ${p.classe}` : ""}</div>
+              <div className="flex justify-between items-start mb-0.5">
+                <div className="font-bold text-slate-900 truncate pr-2">{p.etudiantNom}</div>
+                {p.preuve && (
+                  <div className="flex items-center gap-1 text-[10px] font-black text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded uppercase">
+                    <Eye size={10} /> Photo
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-slate-400 mb-3 truncate">{p.matricule} · {p.filiere || ""} {p.classe ? `· ${p.classe}` : ""}</div>
               <div className="text-2xl font-bold mb-3" style={{ color: etabInfo?.color || "#2563eb" }}>{formatMGA(p.montant)}</div>
               <div className="flex items-center justify-between text-xs text-slate-400 mb-4">
                 <span>{p.date}</span>
@@ -134,6 +145,21 @@ export default function RecusPage() {
                 <span className="text-slate-600 font-semibold">Montant paye</span>
                 <span className="text-2xl font-bold" style={{ color: etabInfo?.color || "#2563eb" }}>{formatMGA(preview.montant)}</span>
               </div>
+
+              {preview.preuve && (
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Justificatif de paiement</div>
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group relative">
+                    <img src={preview.preuve} alt="Preuve" className="w-full h-auto max-h-[200px] object-contain" />
+                    <button onClick={() => {
+                      const win = window.open();
+                      if (win) win.document.write(`<body style="margin:0; background:#000; display:flex; align-items:center; justify-center"><img src="${preview.preuve}" style="max-width:100%; max-height:100vh; margin:auto"></body>`);
+                    }} className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-2 text-xs font-bold"><Eye size={16}/> Agrandir</div>
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2 text-center">
                 <span className="text-emerald-700 font-bold text-sm">Paiement confirme</span>
               </div>

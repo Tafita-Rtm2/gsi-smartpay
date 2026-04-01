@@ -342,7 +342,7 @@ export default function EtudiantsPage() {
           type: "update_paiement",
           collection: "paiements",
           targetId: pid,
-          payload: { montant, date: payForm.date, mode: payForm.mode, transactionRef: payForm.transactionRef, preuve: payForm.preuve, note },
+          payload: { montant, date: payForm.date, mode: payForm.mode, transactionRef: payForm.transactionRef, preuve: payForm.preuve, preuveFilename: payForm.preuveFilename, note },
           description: approvalDesc || "Modification de paiement",
           agentId: currentUser?.id || "",
           agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
@@ -937,7 +937,18 @@ export default function EtudiantsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-slate-900 text-sm">{formatMGA(p.montant)}</div>
-                                  <div className="text-[10px] text-slate-500 font-bold uppercase">{p.mode} {p.transactionRef && `· ${p.transactionRef}`}</div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-[10px] text-slate-500 font-bold uppercase">{p.mode} {p.transactionRef && `· ${p.transactionRef}`}</div>
+                                    {p.preuve && (
+                                      <button onClick={(e) => {
+                                        e.stopPropagation();
+                                        const win = window.open();
+                                        if (win) win.document.write(`<body style="margin:0; background:#000; display:flex; align-items:center; justify-center"><img src="${p.preuve}" style="max-width:100%; max-height:100vh; margin:auto"></body>`);
+                                      }} className="p-1 bg-brand-50 text-brand-600 rounded hover:bg-brand-100 transition-colors">
+                                        <Eye size={10} />
+                                      </button>
+                                    )}
+                                  </div>
                                   <div className="text-[10px] text-slate-400">{p.date} · {p.agentNom}</div>
                         </div>
                         <div className="flex items-center gap-1">
