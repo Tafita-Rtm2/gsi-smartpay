@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Users, Plus, Trash2, Edit3, Eye, EyeOff, CheckCircle2,
   XCircle, Building2, CreditCard, GraduationCap, TrendingUp,
@@ -14,6 +14,7 @@ import {
   getStudentId, getStudentName, calculateIntelligentStatus
 } from "@/lib/api";
 import clsx from "clsx";
+import CustomModal from "@/components/CustomModal";
 
 const ETAB_LIST = Object.entries(ETABLISSEMENTS) as [Etablissement, typeof ETABLISSEMENTS[Etablissement]][];
 const ROLES: Role[] = ["comptable", "agent"];
@@ -23,7 +24,6 @@ export default function AdminPage() {
   const { appState, createUser, updateUser, deleteUser, refreshState } = useAuth();
   const [tab, setTab] = useState<Tab>("apercu");
 
-  // Données dynamiques
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
@@ -46,12 +46,48 @@ export default function AdminPage() {
   const [formError, setFormError] = useState("");
   const [resetting, setResetting] = useState(false);
 
+  // Custom UI Modals state
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "info" | "success" | "warning" | "danger";
+    onConfirm?: () => void;
+    confirmLabel?: string;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (title: string, message: string, type: "info" | "success" | "warning" | "danger" = "info") => {
+    setModalConfig({
+      isOpen: true,
+      title,
+      message,
+      type,
+      confirmLabel: "OK"
+    });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void, type: "warning" | "danger" = "warning") => {
+    setModalConfig({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm,
+      confirmLabel: "Confirmer"
+    });
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [s, e, p, r] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements(), fetchRequests()]);
       setStudents(s); setEcolages(e); setPaiements(p); setRequests(r);
-      await refreshState(); // Charger aussi les comptes staff
+      await refreshState();
     } catch (err) {
       console.error("Erreur de chargement admin:", err);
     }
@@ -60,25 +96,31 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleResetData = async () => {
-    if (!confirm("ATTENTION : Reinitialiser tout à 0 ?")) return;
-    setResetting(true);
-    try {
-      const { deletePaiement, deleteEcolage } = await import("@/lib/api");
-      for (const p of paiements) {
-        const id = p.id || p._id;
-        if (id) await deletePaiement(id);
-      }
-      for (const e of ecolages) {
-        const id = e.id || e._id;
-        if (id) await deleteEcolage(id);
-      }
-      alert("Données réinitialisées.");
-      await load();
-    } catch (e) {
-      alert("Erreur lors de la réinitialisation.");
-    }
-    setResetting(false);
+  const handleResetData = () => {
+    showConfirm(
+      "Action Critique",
+      "Voulez-vous vraiment réinitialiser toutes les données financières ? Cette action est irréversible.",
+      async () => {
+        setResetting(true);
+        try {
+          const { deletePaiement, deleteEcolage } = await import("@/lib/api");
+          for (const p of paiements) {
+            const id = p.id || p._id;
+            if (id) await deletePaiement(id);
+          }
+          for (const e of ecolages) {
+            const id = e.id || e._id;
+            if (id) await deleteEcolage(id);
+          }
+          showAlert("Succès", "Toutes les données financières ont été effacées.", "success");
+          await load();
+        } catch (e) {
+          showAlert("Erreur", "Une erreur est survenue lors de la réinitialisation.", "danger");
+        }
+        setResetting(false);
+      },
+      "danger"
+    );
   };
 
   const handleCreateUser = async () => {
@@ -94,6 +136,7 @@ export default function AdminPage() {
     setForm({ username: "", password: "", nom: "", prenom: "", role: "comptable", etablissement: "analakely", actif: true });
     setFormError("");
     setLoading(false);
+    showAlert("Utilisateur créé", `Le compte de ${form.prenom} a été créé avec succès.`, "success");
   };
 
   const filteredUsers = appState.users.filter(u => {
@@ -122,73 +165,83 @@ export default function AdminPage() {
     return { id, info, students: etabStudents.length, users: users.length, totalPaye, totalDu, taux: totalDu > 0 ? Math.round((totalPaye/totalDu)*100) : 0, countPaye, countImpaye };
   });
 
-  const handleApproveRequest = async (req: DBRequest) => {
-    if (!confirm("Approuver cette demande ?")) return;
-    setLoading(true);
-    const reqId = req.id || req._id || "";
-    try {
-      if (req.type === "update_ecolage") {
-        const ec = ecolages.find(e => (e.id || e._id) === req.targetId);
-        if (ec) {
-          const newDu = req.payload.montantDu;
-          const st = calculateIntelligentStatus(ec.montantPaye, newDu, ec.montantMensuel);
-          await updateEcolage(req.targetId, { montantDu: newDu, statut: st });
-        }
-      } else if (req.type === "delete_ecolage") {
-        await deleteEcolage(req.targetId);
-        // Also delete associated payments
-        const toDelete = paiements.filter(p => p.etudiantId === req.payload.etudiantId);
-        for (const p of toDelete) {
-          const pid = p.id || p._id;
-          if (pid) await deletePaiement(pid);
-        }
-      } else if (req.type === "update_paiement") {
-        const oldP = paiements.find(p => (p.id || p._id) === req.targetId);
-        if (oldP) {
-          await updatePaiement(req.targetId, req.payload);
-          // Update ecolage balance
-          const ec = ecolages.find(e => e.etudiantId === oldP.etudiantId);
-          if (ec) {
-            const diff = req.payload.montant - oldP.montant;
-            const newTotal = ec.montantPaye + diff;
-            const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
-            await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
+  const handleApproveRequest = (req: DBRequest) => {
+    showConfirm(
+      "Approbation",
+      "Voulez-vous approuver cette modification financière ?",
+      async () => {
+        setLoading(true);
+        const reqId = req.id || req._id || "";
+        try {
+          if (req.type === "update_ecolage") {
+            const ec = ecolages.find(e => (e.id || e._id) === req.targetId);
+            if (ec) {
+              const newDu = req.payload.montantDu;
+              const st = calculateIntelligentStatus(ec.montantPaye, newDu, ec.montantMensuel);
+              await updateEcolage(req.targetId, { montantDu: newDu, statut: st });
+            }
+          } else if (req.type === "delete_ecolage") {
+            await deleteEcolage(req.targetId);
+            const toDelete = paiements.filter(p => p.etudiantId === req.payload.etudiantId);
+            for (const p of toDelete) {
+              const pid = p.id || p._id;
+              if (pid) await deletePaiement(pid);
+            }
+          } else if (req.type === "update_paiement") {
+            const oldP = paiements.find(p => (p.id || p._id) === req.targetId);
+            if (oldP) {
+              await updatePaiement(req.targetId, req.payload);
+              const ec = ecolages.find(e => e.etudiantId === oldP.etudiantId);
+              if (ec) {
+                const diff = req.payload.montant - oldP.montant;
+                const newTotal = ec.montantPaye + diff;
+                const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
+                await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
+              }
+            }
+          } else if (req.type === "delete_paiement") {
+            await deletePaiement(req.targetId);
+            const ec = ecolages.find(e => e.etudiantId === req.payload.etudiantId);
+            if (ec) {
+              const newTotal = Math.max(0, ec.montantPaye - req.payload.montant);
+              const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
+              await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
+            }
           }
-        }
-      } else if (req.type === "delete_paiement") {
-        await deletePaiement(req.targetId);
-        const ec = ecolages.find(e => e.etudiantId === req.payload.etudiantId);
-        if (ec) {
-          const newTotal = Math.max(0, ec.montantPaye - req.payload.montant);
-          const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
-          await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
-        }
-      }
 
-      await updateRequest(reqId, {
-        status: "approved",
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: "admin"
-      });
-      alert("Demande approuvée avec succès.");
-      await load();
-    } catch (e) {
-      alert("Erreur lors de l'approbation.");
-    }
-    setLoading(false);
+          await updateRequest(reqId, {
+            status: "approved",
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: "admin"
+          });
+          showAlert("Approuvé", "La demande a été traitée avec succès.", "success");
+          await load();
+        } catch (e) {
+          showAlert("Erreur", "Un problème est survenu lors du traitement.", "danger");
+        }
+        setLoading(false);
+      },
+      "warning"
+    );
   };
 
-  const handleRejectRequest = async (reqId: string) => {
-    if (!confirm("Rejeter cette demande ?")) return;
-    setLoading(true);
-    await updateRequest(reqId, {
-      status: "rejected",
-      reviewedAt: new Date().toISOString(),
-      reviewedBy: "admin"
-    });
-    alert("Demande rejetée.");
-    await load();
-    setLoading(false);
+  const handleRejectRequest = (reqId: string) => {
+    showConfirm(
+      "Rejet de demande",
+      "Voulez-vous rejeter cette demande de modification ?",
+      async () => {
+        setLoading(true);
+        await updateRequest(reqId, {
+          status: "rejected",
+          reviewedAt: new Date().toISOString(),
+          reviewedBy: "admin"
+        });
+        showAlert("Rejeté", "La demande a été rejetée.", "info");
+        await load();
+        setLoading(false);
+      },
+      "danger"
+    );
   };
 
   const TABS: { id: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
@@ -201,6 +254,11 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
+      <CustomModal
+        {...modalConfig}
+        onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Administration GSI</h1>
@@ -345,20 +403,32 @@ export default function AdminPage() {
                         <td className="px-6 py-4">
                           {u.role !== "admin" && (
                             <div className="flex gap-2">
-                              <button onClick={async () => {
-                                setLoading(true);
-                                await updateUser(id, { actif: !u.actif });
-                                setLoading(false);
+                              <button onClick={() => {
+                                showConfirm(
+                                  u.actif ? "Bloquer l'accès" : "Réactiver l'accès",
+                                  `Voulez-vous modifier le statut du compte de ${u.prenom} ${u.nom} ?`,
+                                  async () => {
+                                    setLoading(true);
+                                    await updateUser(id, { actif: !u.actif });
+                                    setLoading(false);
+                                  }
+                                );
                               }}
                                 className="text-[10px] font-black uppercase px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">
                                 {u.actif ? "Bloquer" : "Activer"}
                               </button>
-                              <button onClick={async () => {
-                                if(confirm("Supprimer ce compte définitivement ?")) {
-                                  setLoading(true);
-                                  await deleteUser(id);
-                                  setLoading(false);
-                                }
+                              <button onClick={() => {
+                                showConfirm(
+                                  "Suppression Définitive",
+                                  `Voulez-vous vraiment supprimer le compte de ${u.prenom} ${u.nom} ? Cette action est irréversible.`,
+                                  async () => {
+                                    setLoading(true);
+                                    await deleteUser(id);
+                                    setLoading(false);
+                                    showAlert("Compte supprimé", "L'utilisateur a été retiré du système.", "info");
+                                  },
+                                  "danger"
+                                );
                               }}
                                 className="p-1.5 rounded-lg text-red-400 hover:bg-red-50">
                                 <Trash2 size={16} />

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Download, Printer, GraduationCap } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 import clsx from "clsx";
+import CustomModal from "@/components/CustomModal";
 
 export default function AutresPaiementsPage() {
   const { currentUser } = useAuth();
@@ -15,7 +16,6 @@ export default function AutresPaiementsPage() {
   const [payments, setPayments] = useState<DBOtherPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [timeScale, setTimeScale] = useState<"jour" | "mois" | "annee">("mois");
 
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]);
   const [filterMonth, setFilterMonth] = useState(["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][new Date().getMonth()]);
@@ -28,6 +28,29 @@ export default function AutresPaiementsPage() {
   const [formError, setFormError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<DBOtherPayment | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Custom UI Modals state
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "info" | "success" | "warning" | "danger";
+    onConfirm?: () => void;
+    confirmLabel?: string;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  });
+
+  const showAlert = (title: string, message: string, type: "info" | "success" | "warning" | "danger" = "info") => {
+    setModalConfig({ isOpen: true, title, message, type, confirmLabel: "OK" });
+  };
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void, type: "warning" | "danger" = "warning") => {
+    setModalConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel: "Confirmer" });
+  };
 
   // Student picker
   const [showStudentPicker, setShowStudentPicker] = useState(false);
@@ -47,45 +70,54 @@ export default function AutresPaiementsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [p, s] = await Promise.all([fetchOtherPayments(), fetchStudents()]);
-    if (!isAdmin && currentUser) {
-      const myEtab = currentUser.etablissement;
-      const myS = s.filter(st => (st.campus || "").toLowerCase().includes(myEtab));
-      const myIds = new Set(myS.map(st => getStudentId(st)));
-      setPayments(p.filter(pay => myIds.has(pay.etudiantId)));
-      setStudents(myS);
-    } else {
-      setPayments(p); setStudents(s);
+    try {
+      const [p, s] = await Promise.all([fetchOtherPayments(), fetchStudents()]);
+      if (!isAdmin && currentUser) {
+        const myEtab = currentUser.etablissement;
+        const myS = s.filter(st => (st.campus || "").toLowerCase().includes(myEtab));
+        const myIds = new Set(myS.map(st => getStudentId(st)));
+        setPayments(p.filter(pay => myIds.has(pay.etudiantId)));
+        setStudents(myS);
+      } else {
+        setPayments(p); setStudents(s);
+      }
+    } catch (e) {
+      console.error("Load other payments error:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [isAdmin, currentUser]);
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = payments.filter(p => {
-    const q = search.toLowerCase();
-    const matchSearch = (p.etudiantNom || "").toLowerCase().includes(q) || (p.libelle || "").toLowerCase().includes(q);
+  const filtered = useMemo(() => {
+    return payments.filter(p => {
+      const q = search.toLowerCase();
+      const matchSearch = (p.etudiantNom || "").toLowerCase().includes(q) || (p.libelle || "").toLowerCase().includes(q);
 
-    let matchTime = false;
-    if (filterType === "jour") {
-      matchTime = p.date === filterDate;
-    } else if (filterType === "mois") {
-      const d = new Date(p.date);
-      const moisFr = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][d.getMonth()];
-      matchTime = moisFr === filterMonth && String(d.getFullYear()) === filterYear;
-    } else {
-      matchTime = p.date.startsWith(filterYear);
-    }
+      let matchTime = false;
+      if (filterType === "jour") {
+        matchTime = p.date === filterDate;
+      } else if (filterType === "mois") {
+        const d = new Date(p.date);
+        const moisFr = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][d.getMonth()];
+        matchTime = moisFr === filterMonth && String(d.getFullYear()) === filterYear;
+      } else {
+        matchTime = p.date.startsWith(filterYear);
+      }
 
-    const matchNiveau = selectedNiveaux.length === 0 || selectedNiveaux.includes(p.classe || "");
+      const matchNiveau = selectedNiveaux.length === 0 || selectedNiveaux.includes(p.classe || "");
 
-    return matchSearch && matchTime && matchNiveau;
-  });
+      return matchSearch && matchTime && matchNiveau;
+    });
+  }, [payments, search, filterType, filterDate, filterMonth, filterYear, selectedNiveaux]);
 
-  const filteredStudents = students.filter(s => {
-    const q = studentSearch.toLowerCase();
-    return getStudentName(s).toLowerCase().includes(q) || (s.matricule || "").toLowerCase().includes(q);
-  });
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => {
+      const q = studentSearch.toLowerCase();
+      return getStudentName(s).toLowerCase().includes(q) || (s.matricule || "").toLowerCase().includes(q);
+    });
+  }, [students, studentSearch]);
 
   const handleAdd = async () => {
     setFormError("");
@@ -96,7 +128,7 @@ export default function AutresPaiementsPage() {
     await createOtherPayment({
       etudiantId: getStudentId(selectedStudent),
       etudiantNom: getStudentName(selectedStudent),
-      matricule: selectedStudent.matricule,
+      matricule: selectedStudent.matricule || "",
       campus: selectedStudent.campus || currentUser?.etablissement || "",
       filiere: selectedStudent.filiere || "",
       classe: selectedStudent.niveau || "L1",
@@ -109,11 +141,12 @@ export default function AutresPaiementsPage() {
       note: form.note,
     });
 
+    showAlert("Succès", "Le paiement a été enregistré.", "success");
     await load();
     setSaving(false);
     setShowModal(false);
     setSelectedStudent(null);
-    setForm({ libelle: "", montant: "", date: new Date().toISOString().split("T")[0], mode: "", note: "" });
+    setForm({ libelle: "", montant: "", date: new Date().toISOString().split("T")[0], mode: "Especes", note: "" });
   };
 
   const handleDelete = async () => {
@@ -121,6 +154,7 @@ export default function AutresPaiementsPage() {
     setDeleting(true);
     const id = deleteConfirm.id || deleteConfirm._id || "";
     if (id) await deleteOtherPayment(id);
+    showAlert("Supprimé", "Le paiement a été retiré.", "info");
     await load();
     setDeleting(false);
     setDeleteConfirm(null);
@@ -128,6 +162,11 @@ export default function AutresPaiementsPage() {
 
   return (
     <div className="space-y-5">
+      <CustomModal
+        {...modalConfig}
+        onClose={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 font-black tracking-tight">Autres Paiements</h1>
@@ -185,14 +224,14 @@ export default function AutresPaiementsPage() {
                 </select>
                 <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
                   className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-700">
-                  {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+                  {["2024", "2025", "2026", "2027"].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </>
             )}
             {filterType === "annee" && (
               <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
                 className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-700">
-                {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+                {["2024", "2025", "2026", "2027"].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             )}
           </div>
@@ -215,127 +254,148 @@ export default function AutresPaiementsPage() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            <tr>{["Étudiant", "Libellé", "Montant", "Date", "Mode", "Agent", ""].map(h => (
-              <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
-            ))}</tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filtered.map((p, i) => (
-              <tr key={p.id || p._id || i} className="hover:bg-slate-50/60 transition-colors">
-                <td className="px-4 py-3 font-semibold text-slate-900">{p.etudiantNom}</td>
-                <td className="px-4 py-3 text-slate-700">{p.libelle}</td>
-                <td className="px-4 py-3 font-bold text-emerald-700">{formatMGA(p.montant)}</td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{p.date}</td>
-                <td className="px-4 py-3 text-slate-500 text-xs">{p.mode}</td>
-                <td className="px-4 py-3 text-slate-400 text-xs">{p.agentNom}</td>
-                <td className="px-4 py-3">
-                  <button onClick={() => setDeleteConfirm(p)}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50">
-                    <Trash2 size={13} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && !loading && (
-          <div className="py-12 text-center text-slate-400">Aucun paiement trouvé</div>
+        {loading ? (
+          <div className="py-16 text-center space-y-3">
+            <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mx-auto" style={{ borderColor: etabColor, borderTopColor: "transparent" }} />
+            <p className="text-slate-400 text-sm">Chargement...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>{["Étudiant", "Libellé", "Montant", "Date", "Mode", "Agent", ""].map(h => (
+                  <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filtered.map((p, i) => (
+                  <tr key={p.id || p._id || i} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-6 py-4 font-bold text-slate-900">{p.etudiantNom}</td>
+                    <td className="px-6 py-4 text-slate-700 font-medium">{p.libelle}</td>
+                    <td className="px-6 py-4 font-black text-emerald-700">{formatMGA(p.montant)}</td>
+                    <td className="px-6 py-4 text-slate-500 text-xs font-medium">{p.date}</td>
+                    <td className="px-6 py-4 text-slate-500 text-[10px] font-black uppercase">{p.mode}</td>
+                    <td className="px-6 py-4 text-slate-400 text-xs font-semibold">{p.agentNom}</td>
+                    <td className="px-6 py-4">
+                      <button onClick={() => {
+                        showConfirm(
+                          "Supprimer ?",
+                          "Voulez-vous supprimer ce paiement ? Cette action est irréversible.",
+                          () => {
+                            setDeleteConfirm(p);
+                            handleDelete();
+                          },
+                          "danger"
+                        );
+                      }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && (
+              <div className="py-20 text-center text-slate-400 space-y-3">
+                <CreditCard size={40} className="mx-auto opacity-10" />
+                <p className="text-xs font-black uppercase tracking-widest italic">Aucun paiement trouvé</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl p-8 space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Nouveau Paiement Divers</h2>
+              <div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">Nouveau Paiement Divers</h2>
+                <p className="text-[10px] font-black uppercase text-slate-400 mt-1 tracking-widest">Encaissement administratif</p>
+              </div>
               <button onClick={() => { setShowModal(false); setSelectedStudent(null); setFormError(""); }}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
+                className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 bg-slate-50 hover:bg-slate-100 transition-all"><X size={20} /></button>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-2">Étudiant</label>
-              {selectedStudent ? (
-                <div className="flex items-center justify-between p-3 bg-brand-50 border border-brand-200 rounded-xl">
-                  <span className="text-sm font-bold text-slate-900">{getStudentName(selectedStudent)}</span>
-                  <button onClick={() => setSelectedStudent(null)} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Étudiant</label>
+                {selectedStudent ? (
+                  <div className="flex items-center justify-between p-4 bg-brand-50 border-2 border-brand-200 rounded-2xl shadow-sm animate-in slide-in-from-top-2">
+                    <span className="text-sm font-black text-slate-900">{getStudentName(selectedStudent)}</span>
+                    <button onClick={() => setSelectedStudent(null)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-white transition-all"><X size={16} /></button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+                    <input type="text" placeholder="Rechercher par nom ou matricule..." value={studentSearch}
+                      onChange={e => setStudentSearch(e.target.value)}
+                      onFocus={() => setShowStudentPicker(true)}
+                      className="w-full pl-12 pr-4 py-4 text-sm font-bold border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 bg-slate-50 focus:bg-white transition-all shadow-sm" />
+                    {showStudentPicker && studentSearch && (
+                      <div className="absolute top-full left-0 right-0 z-20 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl max-h-60 overflow-y-auto p-2 no-scrollbar animate-in fade-in zoom-in-95">
+                        {filteredStudents.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-400 font-bold uppercase italic">Aucun profil trouvé</div>
+                        ) : filteredStudents.map(s => (
+                          <button key={getStudentId(s)} onClick={() => { setSelectedStudent(s); setShowStudentPicker(false); setStudentSearch(""); }}
+                            className="w-full text-left px-4 py-3 hover:bg-brand-50 rounded-xl flex flex-col transition-colors">
+                            <span className="font-black text-slate-900 text-sm">{getStudentName(s)}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mt-0.5">{s.matricule} · {s.filiere}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Libellé du paiement</label>
+                <input type="text" placeholder="Ex: Frais d'examen, Certificat, Badge..." value={form.libelle}
+                  onChange={e => setForm({...form, libelle: e.target.value})}
+                  className="w-full px-4 py-3.5 text-sm font-bold border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 bg-slate-50 focus:bg-white transition-all" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Montant (Ar)</label>
+                  <input type="number" placeholder="0" value={form.montant} onChange={e => setForm({...form, montant: e.target.value})}
+                    className="w-full px-4 py-3.5 text-sm font-black border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 bg-slate-50 focus:bg-white transition-all text-brand-700" />
                 </div>
-              ) : (
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input type="text" placeholder="Rechercher un étudiant..." value={studentSearch}
-                    onChange={e => setStudentSearch(e.target.value)}
-                    onFocus={() => setShowStudentPicker(true)}
-                    className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none" />
-                  {showStudentPicker && studentSearch && (
-                    <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                      {filteredStudents.map(s => (
-                        <button key={getStudentId(s)} onClick={() => { setSelectedStudent(s); setShowStudentPicker(false); setStudentSearch(""); }}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm">{getStudentName(s)} ({s.matricule})</button>
-                      ))}
-                    </div>
-                  )}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Date</label>
+                  <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})}
+                    className="w-full px-4 py-3.5 text-sm font-bold border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 bg-slate-50 focus:bg-white transition-all" />
                 </div>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Libellé du paiement (Saisie libre)</label>
-              <input type="text" placeholder="Ex: Frais d'examen, Certificat, etc." value={form.libelle}
-                onChange={e => setForm({...form, libelle: e.target.value})}
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Montant (Ar)</label>
-                <input type="number" value={form.montant} onChange={e => setForm({...form, montant: e.target.value})}
-                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Date</label>
-                <input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})}
-                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Mode de paiement</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Especes", "Banque", "Mvola", "Airtel Money", "Orange Money"].map(m => (
+                    <button key={m} type="button" onClick={() => setForm(f => ({ ...f, mode: m }))}
+                      className={clsx("px-3 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-tighter",
+                        form.mode === m ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {formError && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-[10px] font-black uppercase tracking-tight text-center">{formError}</div>}
             </div>
 
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1.5 tracking-widest">Mode de paiement</label>
-              <div className="grid grid-cols-2 gap-2">
-                {["Especes", "Banque", "Mvola", "Airtel Money", "Orange Money"].map(m => (
-                  <button key={m} type="button" onClick={() => setForm(f => ({ ...f, mode: m }))}
-                    className={clsx("px-3 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-tight",
-                      form.mode === m ? "bg-brand-600 text-white border-brand-600 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {formError && <p className="text-red-500 text-xs">{formError}</p>}
-
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium">Annuler</button>
+            <div className="flex gap-4 pt-4">
+              <button onClick={() => { setShowModal(false); setSelectedStudent(null); setFormError(""); }}
+                className="flex-1 py-4 rounded-2xl border-2 border-slate-100 text-xs font-black uppercase text-slate-400 hover:bg-slate-50 transition-colors">
+                Annuler
+              </button>
               <button onClick={handleAdd} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50"
-                style={{ background: etabColor }}>{saving ? "Enregistrement..." : "Enregistrer"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600"><AlertTriangle size={24} /></div>
-            <div className="text-center">
-              <h2 className="font-bold text-lg">Supprimer ce paiement ?</h2>
-              <p className="text-sm text-slate-500">Cette action est irréversible.</p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 font-medium">Annuler</button>
-              <button onClick={handleDelete} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-bold">{deleting ? "..." : "Supprimer"}</button>
+                className="flex-[1.5] py-4 rounded-2xl text-white text-xs font-black uppercase shadow-xl disabled:opacity-60 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
+                style={{ background: etabColor }}>
+                {saving ? <><span className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Traitement...</> : <><Check size={18}/> Enregistrer</>}
+              </button>
             </div>
           </div>
         </div>
