@@ -1,0 +1,46 @@
+name: Build pour cPanel (Statique + API Express)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Installation des dépendances
+        run: npm install
+
+      - name: Build de l'application
+        run: npm run build
+
+      - name: Organisation des fichiers pour cPanel
+        run: |
+          mkdir -p deploy
+
+          # 1. Copie le frontend statique généré dans "out/"
+          cp -r out deploy/out
+
+          # 2. Copie le serveur API léger
+          cp server.js deploy/server.js
+
+          # 3. Copie le package.json (essentiel pour npm install sur cPanel)
+          cp package.json deploy/package.json
+
+          # 4. Copie le dossier public par sécurité
+          if [ -d "public" ]; then cp -r public deploy/public; fi
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsi-smartpay-full-package
+          path: deploy/
+          include-hidden-files: true

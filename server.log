@@ -1,0 +1,6 @@
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+--- GSI SMARTPAY STARTUP ---
+[INIT] GSI_DATABASE_URL: MISSING
+[INIT] GSI_ADMIN_PASSWORD: MISSING
+----------------------------
+> GSI SmartPay prêt sur le port 3000
