@@ -56,7 +56,7 @@ export default function EtudiantsPage() {
   const [search,        setSearch]        = useState("");
   const [filiereFilter, setFiliereFilter] = useState("Toutes");
   const [statutTab,     setStatutTab]     = useState<FilterTab>("tous");
-  const [selectedNiveau, setSelectedNiveau] = useState<string>("Tous");
+  const [selectedNiveaux, setSelectedNiveaux] = useState<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Modals state
@@ -208,11 +208,11 @@ export default function EtudiantsPage() {
       const name = getStudentName(s).toLowerCase();
       const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
       const ok2 = filiereFilter === "Toutes" || normalizeString(s.filiere||"") === normFiliereFilter;
-      const ok2b = selectedNiveau === "Tous" || (s.niveau || "L1") === selectedNiveau;
+      const ok2b = selectedNiveaux.length === 0 || selectedNiveaux.includes(s.niveau || "L1");
       const ok3 = statutTab === "tous" || ec.statut === statutTab;
       return ok1 && ok2 && ok2b && ok3;
     });
-  }, [studentData, search, filiereFilter, selectedNiveau, statutTab]);
+  }, [studentData, search, filiereFilter, selectedNiveaux, statutTab]);
 
   const getStudentPaiements = (s: DBStudent) => {
     const id = getStudentId(s);
@@ -239,7 +239,7 @@ export default function EtudiantsPage() {
         montantDu: amount,
         montantPaye: 0,
         statut: "impaye",
-        annee: "2025/2026",
+        annee: "2026",
       });
       if (result) ec = result;
       await load();
@@ -422,7 +422,7 @@ export default function EtudiantsPage() {
             montantMensuel: config.monthlyAmount,
             montantPaye: 0,
             statut: "impaye",
-            annee: "2025/2026",
+            annee: "2026",
           });
         }
       }
@@ -630,9 +630,9 @@ export default function EtudiantsPage() {
         </div>
         {!isAdmin && filieres.length > 0 && (
           <div className="space-y-2 pb-0.5">
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               {["Toutes",...filieres].map(f => (
-                <button key={f} onClick={() => { setFiliereFilter(f); setSelectedNiveau("Tous"); }}
+                <button key={f} onClick={() => { setFiliereFilter(f); }}
                   className={clsx("shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap",
                     filiereFilter===f ? "text-white border-transparent shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}
                   style={filiereFilter===f ? {background:etabColor} : {}}>
@@ -640,23 +640,25 @@ export default function EtudiantsPage() {
                 </button>
               ))}
             </div>
-            {filiereFilter !== "Toutes" && (
-              <div className="flex gap-2 overflow-x-auto animate-in fade-in slide-in-from-left-2">
-                {["Tous", "L1", "L2", "L3", "M1", "M2"].map(niv => (
-                  <button key={niv} onClick={() => setSelectedNiveau(niv)}
-                    className={clsx("shrink-0 px-4 py-1 rounded-lg text-[10px] font-black uppercase transition-all border",
-                      selectedNiveau===niv ? "bg-slate-900 text-white border-slate-900" : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100")}>
-                    {niv}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2 overflow-x-auto animate-in fade-in slide-in-from-left-2">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Niveaux:</span>
+              {["L1", "L2", "L3", "M1", "M2"].map(niv => (
+                <button key={niv} onClick={() => setSelectedNiveaux(prev => prev.includes(niv) ? prev.filter(x => x !== niv) : [...prev, niv])}
+                  className={clsx("shrink-0 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border",
+                    selectedNiveaux.includes(niv) ? "bg-slate-900 text-white border-slate-900 shadow-sm" : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100")}>
+                  {niv}
+                </button>
+              ))}
+              {selectedNiveaux.length > 0 && (
+                <button onClick={() => setSelectedNiveaux([])} className="text-[10px] font-black text-brand-600 hover:underline uppercase px-2">Tous</button>
+              )}
+            </div>
           </div>
         )}
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span>{filtered.length} resultat(s) sur {students.length}</span>
-          {(search || filiereFilter!=="Toutes" || statutTab!=="tous") && (
-            <button onClick={() => { setSearch(""); setFiliereFilter("Toutes"); setStatutTab("tous"); }}
+          {(search || filiereFilter!=="Toutes" || statutTab!=="tous" || selectedNiveaux.length > 0) && (
+            <button onClick={() => { setSearch(""); setFiliereFilter("Toutes"); setStatutTab("tous"); setSelectedNiveaux([]); }}
               className="text-brand-600 hover:underline flex items-center gap-1 font-medium"><X size={11} /> Reinitialiser</button>
           )}
         </div>
@@ -935,8 +937,8 @@ export default function EtudiantsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-slate-900 text-sm">{formatMGA(p.montant)}</div>
-                          <div className="text-xs text-slate-400">{p.date} · {p.note || "—"}</div>
-                          <div className="text-xs text-slate-400">{p.agentNom}</div>
+                                  <div className="text-[10px] text-slate-500 font-bold uppercase">{p.mode} {p.transactionRef && `· ${p.transactionRef}`}</div>
+                                  <div className="text-[10px] text-slate-400">{p.date} · {p.agentNom}</div>
                         </div>
                         <div className="flex items-center gap-1">
                           <button onClick={e => { e.stopPropagation(); openEditPayment(p); setProfileStudent(null); }}
@@ -1150,7 +1152,7 @@ export default function EtudiantsPage() {
                       <span className="text-[10px] font-bold truncate max-w-[150px]">
                         {payForm.preuveFilename || "Uploader / Photo"}
                       </span>
-                      <input type="file" className="hidden" accept="image/*" capture="environment"
+                      <input type="file" className="hidden" accept="image/*"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {

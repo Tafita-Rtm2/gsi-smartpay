@@ -337,29 +337,13 @@ export function formatMGA(amount: number): string {
 }
 
 /**
- * Calcule l'état du paiement de l'écolage en fonction du montant payé, du total dû et du montant mensuel.
- * Si le montant payé est supérieur ou égal au montant attendu pour le mois de l'année scolaire en cours (Oct-Sep),
- * l'étudiant est marqué comme "paye" pour le moment, sinon "en_attente".
+ * Calcule l'état du paiement de l'écolage.
+ * "paye" si le total dû est atteint.
+ * "en_attente" si un paiement partiel a été fait.
+ * "impaye" si aucun paiement n'a été fait.
  */
 export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
   if (paye <= 0) return "impaye";
-  if (paye >= du) return "paye";
-
-  // Si on n'a pas de montant mensuel, on reste en "en_attente" s'il a déjà payé quelque chose
-  if (!mensuel || mensuel <= 0) return paye > 0 ? "en_attente" : "impaye";
-
-  const now = new Date();
-  const currentMonth = now.getMonth();
-
-  // Année scolaire type GSI : Octobre (9) à Septembre (8)
-  const schoolMonths = [9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8];
-  const monthsPassed = schoolMonths.indexOf(currentMonth) + 1;
-
-  // Si le mois n'est pas dans le cycle scolaire normal, on considère qu'on attend tout
-  if (monthsPassed <= 0) return "en_attente";
-
-  const expectedSoFar = monthsPassed * mensuel;
-
-  if (paye >= expectedSoFar) return "paye";
+  if (paye >= du && du > 0) return "paye";
   return "en_attente";
 }

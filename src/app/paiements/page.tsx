@@ -9,8 +9,22 @@ import CustomModal from "@/components/CustomModal";
 
 const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
+function normalizeString(str: any) {
+  if (typeof str !== 'string') return "";
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, "et")
+    .replace(/hote(l+)erie/g, "hotellerie")
+    .replace(/voyage(s?)/g, "voyage")
+    .replace(/[^a-z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function PaiementsPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, appState } = useAuth();
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
@@ -135,13 +149,36 @@ export default function PaiementsPage() {
     if (!selectedStudent) { setFormError("Selectionnez un etudiant"); return; }
     if (!form.montant || Number(form.montant) <= 0) { setFormError("Montant invalide"); return; }
 
-    const ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
+    setSaving(true);
+    let ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
+
+    // Auto-create ecolage if missing
     if (!ec) {
-      setFormError("Cet etudiant n'a pas d'ecolage fini. Allez dans la page Etudiants pour en creer un.");
-      return;
+      const campus = (selectedStudent.campus || "").toLowerCase();
+      const sFiliere = selectedStudent.filiere || "";
+      const sNiveau = selectedStudent.niveau || "L1";
+      const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(sFiliere));
+      const amount = config?.amount || 1500000;
+      const { createEcolage } = await import("@/lib/api");
+      ec = await createEcolage({
+        etudiantId: getStudentId(selectedStudent),
+        etudiantNom: getStudentName(selectedStudent),
+        matricule: selectedStudent.matricule || "",
+        campus: selectedStudent.campus || currentUser?.etablissement || "",
+        filiere: sFiliere,
+        classe: sNiveau,
+        montantDu: amount,
+        montantPaye: 0,
+        statut: "impaye",
+        annee: "2026",
+      }) || undefined;
     }
 
-    setSaving(true);
+    if (!ec) {
+      setFormError("Impossible de créer le dossier d'écolage.");
+      setSaving(false);
+      return;
+    }
     const montant = Number(form.montant);
     const note = `${form.mois} ${form.annee}${form.note ? " — " + form.note : ""}`;
 
@@ -427,18 +464,33 @@ export default function PaiementsPage() {
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>{["Reference", "Etudiant", "Montant", "Date", "Note", "Agent", ""].map(h => (
+                  <tr>{["Reference", "Etudiant", "Montant", "Date", "Mode", "Agent", ""].map(h => (
                     <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {filtered.map((p, i) => (
                     <tr key={p.id || p._id || i} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-bold text-brand-600">{p.reference || "—"}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-brand-600">
+                        <div className="flex items-center gap-2">
+                          {p.reference || "—"}
+                          {p.preuve && (
+                            <button onClick={() => {
+                              const win = window.open();
+                              if (win) win.document.write(`<img src="${p.preuve}" style="max-width:100%">`);
+                            }} title="Voir justificatif" className="p-1 bg-brand-50 text-brand-600 rounded hover:bg-brand-100 transition-colors">
+                              <Eye size={10} />
+                            </button>
+                          )}
+                        </div>
+                        {p.transactionRef && <div className="text-[9px] text-slate-400 mt-0.5">Ref: {p.transactionRef}</div>}
+                      </td>
                       <td className="px-6 py-4 font-bold text-slate-900">{p.etudiantNom}</td>
                       <td className="px-6 py-4 font-black text-emerald-700">{formatMGA(p.montant)}</td>
                       <td className="px-6 py-4 text-slate-500 text-xs font-medium">{p.date}</td>
-                      <td className="px-6 py-4 text-slate-400 text-xs truncate max-w-[150px]">{p.note || "—"}</td>
+                      <td className="px-6 py-4">
+                        <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-black uppercase text-slate-500">{p.mode}</span>
+                      </td>
                       <td className="px-6 py-4 text-slate-500 text-xs font-semibold">{p.agentNom}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -634,7 +686,7 @@ export default function PaiementsPage() {
                       <span className="text-[10px] font-black uppercase truncate max-w-[180px]">
                         {form.preuveFilename || "Uploader Image / Caméra"}
                       </span>
-                      <input type="file" className="hidden" accept="image/*" capture="environment"
+                      <input type="file" className="hidden" accept="image/*"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {

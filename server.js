@@ -121,8 +121,18 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
   if (isSensitiveAction && isSensitiveCollection) {
     console.log(`[SENSITIVE ACTION] Method: ${req.method}, Role: ${role}, Collection: ${collection}`);
     if (role !== "admin") {
-      console.warn(`[ACTION BLOCKED] User ${userSession.id} (${role}) tried ${req.method} on ${collection} without admin rights.`);
-      return res.status(403).json({ error: "Approbation de l'administrateur requise pour cette action." });
+      // EXCEPTION : On autorise le staff à mettre à jour l'état de l'écolage lors d'un paiement
+      // (montantPaye, statut, updatedAt)
+      const allowedFields = ["montantPaye", "statut", "updatedAt"];
+      const requestedFields = Object.keys(req.body || {});
+      const isTuitionUpdateOnly = collection === "ecolage" &&
+                                  req.method === "PATCH" &&
+                                  requestedFields.every(f => allowedFields.includes(f));
+
+      if (!isTuitionUpdateOnly) {
+        console.warn(`[ACTION BLOCKED] User ${userSession.id} (${role}) tried ${req.method} on ${collection} without admin rights.`);
+        return res.status(403).json({ error: "Approbation de l'administrateur requise pour cette action." });
+      }
     }
   } else if (req.method === "DELETE") {
     // Garder la sécurité générique sur les suppressions pour les autres collections
