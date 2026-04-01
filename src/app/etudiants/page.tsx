@@ -425,7 +425,7 @@ export default function EtudiantsPage() {
     );
   };
 
-  const getStudentEcolageWithFallbacks = (s: DBStudent) => {
+  const getStudentEcolageWithFallbacks = (s: DBStudent): DBEcolage => {
     const ec = getEcolage(s);
     if (ec) return ec;
 
@@ -436,9 +436,15 @@ export default function EtudiantsPage() {
       p.niveau === (s.niveau || "L1")
     );
     return {
+      etudiantId: getStudentId(s),
+      etudiantNom: getStudentName(s),
+      matricule: s.matricule,
+      campus: s.campus || "",
+      filiere: s.filiere || "",
+      classe: s.niveau || "L1",
       montantDu: config?.amount || 0,
       montantPaye: 0,
-      statut: "impaye" as const,
+      statut: "impaye",
       montantMensuel: config?.monthlyAmount || 0
     };
   };
@@ -593,6 +599,7 @@ export default function EtudiantsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {filtered.map(s => {
+                    const realEc = getEcolage(s);
                     const ec = getStudentEcolageWithFallbacks(s);
                     const statut = ec.statut;
                     return (
@@ -641,13 +648,13 @@ export default function EtudiantsPage() {
                               <CreditCard size={14} />
                             </button>
                             {/* Edit/Add ecolage */}
-                            {ec ? (
+                            {realEc ? (
                               <>
-                                <button onClick={() => openEditEcolage(ec)} title="Modifier l'écolage total"
+                                <button onClick={() => openEditEcolage(realEc)} title="Modifier l'écolage total"
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all border border-transparent hover:border-amber-200">
                                   <Edit3 size={14} />
                                 </button>
-                                <button onClick={() => setDeleteEcolageObj(ec)} title="Supprimer l'écolage"
+                                <button onClick={() => setDeleteEcolageObj(realEc)} title="Supprimer l'écolage"
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all border border-transparent hover:border-red-200">
                                   <Trash2 size={14} />
                                 </button>
@@ -670,6 +677,7 @@ export default function EtudiantsPage() {
             {/* Mobile */}
             <div className="md:hidden divide-y divide-slate-100">
               {filtered.map(s => {
+                const realEc = getEcolage(s);
                 const ec = getStudentEcolageWithFallbacks(s);
                 const statut = ec.statut;
                 return (
@@ -703,13 +711,13 @@ export default function EtudiantsPage() {
                         className="flex items-center gap-1 text-xs text-emerald-600 border border-emerald-200 px-2.5 py-1.5 rounded-lg hover:bg-emerald-50">
                         <CreditCard size={12} /> Paiement
                       </button>
-                      {ec ? (
+                      {realEc ? (
                         <>
-                          <button onClick={() => openEditEcolage(ec)}
+                          <button onClick={() => openEditEcolage(realEc)}
                             className="flex items-center gap-1 text-xs text-amber-600 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-50">
                             <Edit3 size={12} /> Modifier
                           </button>
-                          <button onClick={() => setDeleteEcolageObj(ec)}
+                          <button onClick={() => setDeleteEcolageObj(realEc)}
                             className="flex items-center gap-1 text-xs text-red-500 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50">
                             <Trash2 size={12} /> Supprimer
                           </button>
