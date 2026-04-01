@@ -68,9 +68,11 @@ export default function EtudiantsPage() {
   const [deletePaiementObj, setDeletePaiementObj] = useState<DBPaiement | null>(null);
 
   const [ecolageForm, setEcolageForm] = useState({ montantDu: "" });
+  const [approvalDesc, setApprovalDesc] = useState("");
   const [payForm, setPayForm] = useState({
     mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()),
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
+    mode: "Especes", transactionRef: "", preuve: "",
   });
 
   const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
@@ -141,7 +143,7 @@ export default function EtudiantsPage() {
     }
     setPayStudent(s);
     setPayEcolage(ec || null);
-    setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
+    setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "" });
   };
 
   const openEditEcolage = (ec: DBEcolage) => {
@@ -151,15 +153,37 @@ export default function EtudiantsPage() {
 
   const handleSaveEcolage = async () => {
     if (!editEcolage) return;
+    if (!isAdmin && !approvalDesc) {
+      alert("Veuillez fournir un motif pour la modification."); return;
+    }
     setSaving(true);
+    const id = editEcolage.id || editEcolage._id || "";
     const newDu = Number(ecolageForm.montantDu);
-    const st: "paye"|"impaye"|"en_attente" =
-      editEcolage.montantPaye >= newDu ? "paye" : editEcolage.montantPaye > 0 ? "en_attente" : "impaye";
 
-    await updateEcolage(editEcolage.id || editEcolage._id || "", { montantDu: newDu, statut: st });
+    if (isAdmin) {
+      const st: "paye"|"impaye"|"en_attente" =
+        editEcolage.montantPaye >= newDu ? "paye" : editEcolage.montantPaye > 0 ? "en_attente" : "impaye";
+      await updateEcolage(id, { montantDu: newDu, statut: st });
+    } else {
+      const { createRequest } = await import("@/lib/api");
+      await createRequest({
+        type: "update_ecolage",
+        collection: "ecolage",
+        targetId: id,
+        payload: { montantDu: newDu },
+        description: approvalDesc,
+        agentId: currentUser?.id || "",
+        agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
+        campus: currentUser?.etablissement || "",
+        status: "pending"
+      });
+      alert("Votre demande de modification a été envoyée.");
+    }
+
     await load();
     setSaving(false);
     setEditEcolage(null);
+    setApprovalDesc("");
   };
 
   const openEditPayment = (p: DBPaiement) => {
@@ -184,7 +208,10 @@ export default function EtudiantsPage() {
         break;
       }
     }
-    setPayForm({ mois: m, annee: y, montant: String(p.montant), date: p.date, note: noteTxt });
+    setPayForm({
+      mois: m, annee: y, montant: String(p.montant), date: p.date, note: noteTxt,
+      mode: p.mode || "Especes", transactionRef: p.transactionRef || "", preuve: p.preuve || ""
+    });
   };
 
   const handleSavePayment = async () => {
@@ -195,19 +222,36 @@ export default function EtudiantsPage() {
 
     if (editingPaiement) {
       const pid = editingPaiement.id || editingPaiement._id || "";
-      await updatePaiement(pid, { montant, date: payForm.date, note });
-      if (payEcolage && (payEcolage.id || payEcolage._id)) {
-        const diff = montant - editingPaiement.montant;
-        const newPaye = payEcolage.montantPaye + diff;
-        const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
-        await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+      if (isAdmin) {
+        await updatePaiement(pid, { montant, date: payForm.date, mode: payForm.mode, transactionRef: payForm.transactionRef, preuve: payForm.preuve, note });
+        if (payEcolage && (payEcolage.id || payEcolage._id)) {
+          const diff = montant - editingPaiement.montant;
+          const newPaye = payEcolage.montantPaye + diff;
+          const st: "paye"|"impaye"|"en_attente" = newPaye >= payEcolage.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+          await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+        }
+      } else {
+        const { createRequest } = await import("@/lib/api");
+        await createRequest({
+          type: "update_paiement",
+          collection: "paiements",
+          targetId: pid,
+          payload: { montant, date: payForm.date, mode: payForm.mode, transactionRef: payForm.transactionRef, preuve: payForm.preuve, note },
+          description: approvalDesc || "Modification de paiement",
+          agentId: currentUser?.id || "",
+          agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
+          campus: currentUser?.etablissement || "",
+          status: "pending"
+        });
+        alert("Demande de modification envoyée.");
       }
     } else {
       await createPaiement({
         etudiantId: getStudentId(payStudent), etudiantNom: getStudentName(payStudent),
         matricule: payStudent.matricule, campus: payStudent.campus || currentUser?.etablissement || "",
         filiere: payStudent.filiere || "", classe: payStudent.niveau || "L1",
-        montant, date: payForm.date, mode: "Especes",
+        montant, date: payForm.date, mode: payForm.mode,
+        transactionRef: payForm.transactionRef, preuve: payForm.preuve,
         agentId: currentUser?.id || "", agentNom: `${currentUser?.prenom||""} ${currentUser?.nom||""}`.trim(), note,
       });
       if (payEcolage && (payEcolage.id || payEcolage._id)) {
@@ -216,7 +260,7 @@ export default function EtudiantsPage() {
         await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
       }
     }
-    await load(); setSaving(false); setPayStudent(null); setPayEcolage(null); setEditingPaiement(null);
+    await load(); setSaving(false); setPayStudent(null); setPayEcolage(null); setEditingPaiement(null); setApprovalDesc("");
   };
 
 
@@ -230,7 +274,7 @@ export default function EtudiantsPage() {
     const myEtab = currentUser.etablissement;
 
     for (const s of filtered) {
-      const config = appState.programFees.find(p => p.campus === myEtab && normalizeString(p.filiere) === normalizeString(s.filiere||""));
+      const config = appState.programFees.find(p => p.campus === myEtab && normalizeString(p.filiere) === normalizeString(s.filiere||"") && p.niveau === (s.niveau || "L1"));
       if (config && config.amount > 0) {
         const ec = getEcolage(s);
         if (ec) {
@@ -273,47 +317,82 @@ export default function EtudiantsPage() {
 
   const handleDeleteEcolage = async () => {
     if (!deleteEcolageObj) return;
+    if (!isAdmin && !approvalDesc) {
+      alert("Veuillez fournir un motif pour la suppression."); return;
+    }
     setDeleting(true);
 
     const id = deleteEcolageObj.id || deleteEcolageObj._id || "";
     if (id) {
-      const { deleteEcolage: apiDelEco, deletePaiement: apiDelPay } = await import("@/lib/api");
-      await apiDelEco(id);
+      if (isAdmin) {
+        const { deleteEcolage: apiDelEco, deletePaiement: apiDelPay } = await import("@/lib/api");
+        await apiDelEco(id);
 
-      // Also delete all payments for this student to make them "impayé" (0 paid)
-      const stId = deleteEcolageObj.etudiantId;
-      const toDelete = allPaiements.filter(p => p.etudiantId === stId);
-
-      for (const p of toDelete) {
-        const pid = p.id || p._id;
-        if (pid) await apiDelPay(pid);
+        const stId = deleteEcolageObj.etudiantId;
+        const toDelete = allPaiements.filter(p => p.etudiantId === stId);
+        for (const p of toDelete) {
+          const pid = p.id || p._id;
+          if (pid) await apiDelPay(pid);
+        }
+      } else {
+        const { createRequest } = await import("@/lib/api");
+        await createRequest({
+          type: "delete_ecolage",
+          collection: "ecolage",
+          targetId: id,
+          payload: { etudiantId: deleteEcolageObj.etudiantId },
+          description: approvalDesc,
+          agentId: currentUser?.id || "",
+          agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
+          campus: currentUser?.etablissement || "",
+          status: "pending"
+        });
+        alert("Votre demande de suppression a été envoyée.");
       }
     }
 
     await load(); setDeleting(false); setDeleteEcolageObj(null);
+    setApprovalDesc("");
   };
 
   const handleDeletePaiement = async () => {
     if (!deletePaiementObj) return;
+    if (!isAdmin && !approvalDesc) {
+      alert("Veuillez fournir un motif."); return;
+    }
     setDeleting(true);
     const id = deletePaiementObj.id || deletePaiementObj._id || "";
     if (id) {
-      // Delete from paiements collection
-      await deletePaiement(id);
-      // Update ecolage - subtract montant and recalculate status
-      const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
-      if (ec && (ec.id || ec._id)) {
-        const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
-        // If nothing left paid -> impaye, if partial -> en_attente, if full -> paye
-        const st: "paye"|"impaye"|"en_attente" =
-          newPaye <= 0 ? "impaye" :
-          newPaye >= ec.montantDu ? "paye" : "en_attente";
-        await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
+      if (isAdmin) {
+        await deletePaiement(id);
+        const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
+        if (ec && (ec.id || ec._id)) {
+          const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
+          const st: "paye"|"impaye"|"en_attente" =
+            newPaye <= 0 ? "impaye" :
+            newPaye >= ec.montantDu ? "paye" : "en_attente";
+          await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
+        }
+      } else {
+        const { createRequest } = await import("@/lib/api");
+        await createRequest({
+          type: "delete_paiement",
+          collection: "paiements",
+          targetId: id,
+          payload: { montant: deletePaiementObj.montant, etudiantId: deletePaiementObj.etudiantId },
+          description: approvalDesc,
+          agentId: currentUser?.id || "",
+          agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
+          campus: currentUser?.etablissement || "",
+          status: "pending"
+        });
+        alert("Votre demande de suppression a été envoyée.");
       }
     }
     await load();
     setDeleting(false);
     setDeletePaiementObj(null);
+    setApprovalDesc("");
   };
 
   const Avatar = ({ s, size = 36 }: { s: DBStudent; size?: number }) => {
@@ -912,10 +991,35 @@ export default function EtudiantsPage() {
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
               </div>
             </div>
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{background:etabColor}}><Check size={12} className="text-white" /></div>
-              <div><div className="text-xs text-slate-400">Mode de paiement</div><div className="text-sm font-semibold text-slate-800">Especes</div></div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Mode de paiement</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {["Especes", "Banque", "Mvola", "Airtel Money", "Orange Money"].map(m => (
+                  <button key={m} type="button" onClick={() => setPayForm(f=>({...f, mode: m}))}
+                    className={clsx("px-2 py-1.5 rounded-xl text-[10px] font-black border transition-all uppercase",
+                      payForm.mode === m ? "bg-brand-600 text-white border-brand-600 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {payForm.mode !== "Especes" && (
+              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Réf. Transaction</label>
+                  <input type="text" placeholder="ID..." value={payForm.transactionRef}
+                    onChange={e => setPayForm(f=>({...f, transactionRef: e.target.value}))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">Preuve (URL)</label>
+                  <input type="text" placeholder="http..." value={payForm.preuve}
+                    onChange={e => setPayForm(f=>({...f, preuve: e.target.value}))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-1.5">Note (optionnel)</label>
               <input type="text" placeholder="Ex: 1ere tranche..." value={payForm.note} onChange={e=>setPayForm(f=>({...f,note:e.target.value}))}
@@ -949,6 +1053,14 @@ export default function EtudiantsPage() {
               <div className="font-bold text-slate-900">{deleteEcolageObj.etudiantNom}</div>
               <div className="text-sm text-red-700">{formatMGA(deleteEcolageObj.montantDu)}</div>
             </div>
+            {!isAdmin && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-amber-600 block">Motif de la suppression <span className="text-red-500">*</span></label>
+                <textarea placeholder="Pourquoi supprimer cet écolage ?" value={approvalDesc}
+                  onChange={e => setApprovalDesc(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-amber-50/30 rounded-xl focus:outline-none min-h-[60px]" />
+              </div>
+            )}
             <div className="flex gap-3">
               <button onClick={() => setDeleteEcolageObj(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Non, annuler</button>
               <button onClick={handleDeleteEcolage} disabled={deleting}
@@ -972,24 +1084,29 @@ export default function EtudiantsPage() {
               <button onClick={() => setShowConfig(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X size={16} /></button>
             </div>
 
-            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-2">
-              {filieres.map(f => {
-                const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === f);
-                return (
-                  <div key={f} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-slate-800 truncate">{f}</div>
-                    </div>
-                    <div className="w-40 relative">
-                      <input type="number" placeholder="Montant Ar"
-                        value={config?.amount || ""}
-                        onChange={e => setProgramFee(currentUser!.etablissement, f, Number(e.target.value))}
-                        className="w-full pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-300" />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">Ar</span>
-                    </div>
+            <div className="max-h-[50vh] overflow-y-auto space-y-6 pr-2">
+              {filieres.map(f => (
+                <div key={f} className="space-y-2 border-b border-slate-100 pb-4 last:border-0">
+                  <div className="text-sm font-black text-slate-900 uppercase">{f}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["L1", "L2", "L3", "M1", "M2"].map(niv => {
+                      const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === f && p.niveau === niv);
+                      return (
+                        <div key={niv} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          <span className="text-[10px] font-bold text-slate-400 w-6">{niv}</span>
+                          <div className="relative flex-1">
+                            <input type="number" placeholder="0"
+                              value={config?.amount || ""}
+                              onChange={e => setProgramFee(currentUser!.etablissement, f, Number(e.target.value), niv)}
+                              className="w-full pl-2 pr-6 py-1.5 text-xs border border-slate-200 rounded focus:outline-none" />
+                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400">Ar</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
 
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex gap-3">
@@ -1033,6 +1150,16 @@ export default function EtudiantsPage() {
                 <input type="number" value={ecolageForm.montantDu} onChange={e=>setEcolageForm({montantDu:e.target.value})}
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
               </div>
+
+              {!isAdmin && (
+                <div>
+                  <label className="text-xs font-semibold text-amber-600 block mb-1.5">Motif de la modification <span className="text-red-500">*</span></label>
+                  <textarea placeholder="Pourquoi modifier cet écolage ?" value={approvalDesc}
+                    onChange={e => setApprovalDesc(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-amber-200 bg-amber-50/30 rounded-xl focus:outline-none min-h-[60px]" />
+                </div>
+              )}
+
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-500">
                 <div className="flex justify-between mb-1">
                   <span>Déjà payé :</span>
@@ -1069,6 +1196,14 @@ export default function EtudiantsPage() {
               <div className="text-lg font-bold text-red-700">{formatMGA(deletePaiementObj.montant)}</div>
               <div className="text-xs text-slate-400">{deletePaiementObj.date} · {deletePaiementObj.note||""}</div>
             </div>
+            {!isAdmin && (
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-amber-600 block">Motif de la suppression <span className="text-red-500">*</span></label>
+                <textarea placeholder="Pourquoi supprimer ce paiement ?" value={approvalDesc}
+                  onChange={e => setApprovalDesc(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-amber-200 bg-amber-50/30 rounded-xl focus:outline-none min-h-[60px]" />
+              </div>
+            )}
             <div className="flex gap-3">
               <button onClick={() => setDeletePaiementObj(null)} className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Non, annuler</button>
               <button onClick={handleDeletePaiement} disabled={deleting}

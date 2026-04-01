@@ -113,13 +113,20 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
 
   const { role } = userSession;
 
-  // LOG CRITIQUE POUR LES SUPPRESSIONS
-  if (req.method === "DELETE") {
-    console.log(`[DELETE ATTEMPT] Role: ${role}, URL: ${finalUrl}`);
+  // LOG CRITIQUE POUR LES SUPPRESSIONS ET MODIFICATIONS (Écolage & Paiements)
+  const isSensitiveAction = (req.method === "DELETE" || req.method === "PATCH" || req.method === "PUT");
+  const collection = pathSuffix.split('/')[1];
+  const isSensitiveCollection = ["ecolage", "paiements"].includes(collection);
+
+  if (isSensitiveAction && isSensitiveCollection) {
+    console.log(`[SENSITIVE ACTION] Method: ${req.method}, Role: ${role}, Collection: ${collection}`);
     if (role !== "admin") {
-      console.warn(`[DELETE BLOCKED] User ${userSession.id} with role ${role} tried to delete ${finalUrl}`);
-      return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
+      console.warn(`[ACTION BLOCKED] User ${userSession.id} (${role}) tried ${req.method} on ${collection} without admin rights.`);
+      return res.status(403).json({ error: "Approbation de l'administrateur requise pour cette action." });
     }
+  } else if (req.method === "DELETE") {
+    // Garder la sécurité générique sur les suppressions pour les autres collections
+    if (role !== "admin") return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
   }
 
   try {
@@ -148,7 +155,7 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
         const campus = (item.campus || item.etablissement || "").toLowerCase();
         return campus.includes(myEtab) || campus.includes(myEtab.slice(0, 4));
       };
-      if (["users", "ecolage", "paiements", "expenses", "fees", "staff"].includes(collection)) {
+      if (["users", "ecolage", "paiements", "expenses", "fees", "staff", "requests", "autres_paiements"].includes(collection)) {
         let listKey = "";
         for (const key of ["documents", "data", "results", "items", "records", "list"]) {
           if (Array.isArray(data[key])) { listKey = key; break; }

@@ -11,6 +11,7 @@ const NAV = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/etudiants",  label: "Etudiants",       icon: Users },
   { href: "/paiements",  label: "Paiements",        icon: CreditCard },
+  { href: "/autres-paiements", label: "Autres Paiements", icon: CreditCard },
   { href: "/journal",    label: "Journal financier",icon: BookOpen },
   { href: "/rapports",   label: "Rapports",         icon: FileText },
   { href: "/recus",      label: "Recus",            icon: Receipt },

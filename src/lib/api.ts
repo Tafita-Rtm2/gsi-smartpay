@@ -59,10 +59,49 @@ export interface DBPaiement {
   montant: number;
   date: string;
   mode: string;
+  transactionRef?: string;
+  preuve?: string;
   agentId: string;
   agentNom: string;
   note?: string;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DBOtherPayment {
+  id?: string;
+  _id?: string;
+  etudiantId: string;
+  etudiantNom: string;
+  matricule?: string;
+  campus: string;
+  filiere: string;
+  classe: string;
+  libelle: string;
+  montant: number;
+  date: string;
+  mode: string;
+  agentId: string;
+  agentNom: string;
+  note?: string;
+  createdAt?: string;
+}
+
+export interface DBRequest {
+  id?: string;
+  _id?: string;
+  type: "update_ecolage" | "delete_ecolage" | "update_paiement" | "delete_paiement";
+  collection: "ecolage" | "paiements";
+  targetId: string;
+  payload: any;
+  description: string;
+  agentId: string;
+  agentNom: string;
+  campus: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 
 export interface DBExpense {
@@ -82,6 +121,7 @@ export interface DBFee {
   _id?: string;
   campus: string;
   filiere: string;
+  niveau: string;
   amount: number;
 }
 
@@ -200,6 +240,36 @@ export async function deletePaiement(id: string): Promise<boolean> {
   return apiDelete("paiements", id);
 }
 
+// -- AUTRES PAIEMENTS --
+export async function fetchOtherPayments(): Promise<DBOtherPayment[]> {
+  return apiGet<DBOtherPayment>("autres_paiements");
+}
+
+export async function createOtherPayment(data: Omit<DBOtherPayment, "id" | "_id">): Promise<DBOtherPayment | null> {
+  return apiPost<DBOtherPayment>("autres_paiements", { ...data, createdAt: new Date().toISOString() });
+}
+
+export async function deleteOtherPayment(id: string): Promise<boolean> {
+  return apiDelete("autres_paiements", id);
+}
+
+// -- REQUESTS (APPROBATIONS) --
+export async function fetchRequests(): Promise<DBRequest[]> {
+  return apiGet<DBRequest>("requests");
+}
+
+export async function createRequest(data: Omit<DBRequest, "id" | "_id">): Promise<DBRequest | null> {
+  return apiPost<DBRequest>("requests", { ...data, status: "pending", createdAt: new Date().toISOString() });
+}
+
+export async function updateRequest(id: string, data: Partial<DBRequest>): Promise<boolean> {
+  return apiPatch("requests", id, { ...data, updatedAt: new Date().toISOString() });
+}
+
+export async function deleteRequest(id: string): Promise<boolean> {
+  return apiDelete("requests", id);
+}
+
 // -- STAFF (Dédié) --
 export async function fetchStaff(): Promise<DBStudent[]> {
   return apiGet<DBStudent>("staff");
@@ -241,7 +311,7 @@ export async function fetchFees(): Promise<DBFee[]> {
 
 export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | null> {
   const all = await fetchFees();
-  const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere);
+  const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere && f.niveau === data.niveau);
   if (existing) {
     const id = existing.id || existing._id || "";
     await apiPatch("fees", id, data);

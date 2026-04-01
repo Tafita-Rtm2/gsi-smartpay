@@ -10,6 +10,7 @@ import {
 interface ProgramFee {
   campus: Etablissement;
   filiere: string;
+  niveau: string;
   amount: number;
 }
 
@@ -42,7 +43,7 @@ interface AuthContextType {
   deleteExpense: (id: string) => Promise<void>;
   myExpenses: DBExpense[];
   // Program Fees management
-  setProgramFee: (campus: Etablissement, filiere: string, amount: number) => Promise<void>;
+  setProgramFee: (campus: Etablissement, filiere: string, amount: number, niveau: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -65,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAppState({
       users: staff,
       expenses: expenses,
-      programFees: fees.map(f => ({ campus: f.campus as Etablissement, filiere: f.filiere, amount: f.amount }))
+      programFees: fees.map(f => ({ campus: f.campus as Etablissement, filiere: f.filiere, amount: f.amount, niveau: f.niveau || "L1" }))
     });
   }, []);
 
@@ -146,8 +147,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (ok) await refreshState();
   };
 
-  const setProgramFeeInDb = async (campus: Etablissement, filiere: string, amount: number) => {
-    const res = await saveFee({ campus, filiere, amount });
+  const setProgramFeeInDb = async (campus: Etablissement, filiere: string, amount: number, niveau: string) => {
+    const res = await saveFee({ campus, filiere, amount, niveau });
     if (res) await refreshState();
   };
 

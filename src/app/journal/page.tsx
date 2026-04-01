@@ -12,6 +12,11 @@ export default function JournalPage() {
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"recettes" | "depenses">("recettes");
+
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]);
+  const [filterMonth, setFilterMonth] = useState(["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][new Date().getMonth()]);
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const [filterType, setFilterType] = useState<"jour" | "mois" | "annee">("mois");
   const [catFilter, setCatFilter] = useState("Toutes");
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<DBExpense | null>(null);
@@ -35,13 +40,29 @@ export default function JournalPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const totalRecettes = paiements.reduce((s, p) => s + p.montant, 0);
-  const totalDepenses = myExpenses.reduce((s, e) => s + e.montant, 0);
-  const solde = totalRecettes - totalDepenses;
+  const filteredPaiements = paiements.filter(p => {
+    if (filterType === "jour") return p.date === filterDate;
+    if (filterType === "mois") return p.note?.includes(filterMonth) && p.note?.includes(filterYear);
+    return p.note?.includes(filterYear);
+  });
 
-  const filteredExpenses = myExpenses.filter(e =>
-    catFilter === "Toutes" || e.categorie === catFilter
-  );
+  const filteredExpenses = myExpenses.filter(e => {
+    const matchCat = catFilter === "Toutes" || e.categorie === catFilter;
+    let matchTime = false;
+    if (filterType === "jour") matchTime = e.date === filterDate;
+    else if (filterType === "mois") {
+      const d = new Date(e.date);
+      const moisFr = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][d.getMonth()];
+      matchTime = moisFr === filterMonth && String(d.getFullYear()) === filterYear;
+    } else {
+      matchTime = e.date.startsWith(filterYear);
+    }
+    return matchCat && matchTime;
+  });
+
+  const totalRecettes = filteredPaiements.reduce((s, p) => s + p.montant, 0);
+  const totalDepenses = filteredExpenses.reduce((s, e) => s + e.montant, 0);
+  const solde = totalRecettes - totalDepenses;
 
   const handleAddExpense = () => {
     if (!form.libelle || !form.montant) return;
@@ -112,14 +133,47 @@ export default function JournalPage() {
         </div>
       </div>
 
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {(["recettes", "depenses"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            style={tab === t ? { color: etabColor } : {}}>
-            {t === "recettes" ? "Journal des Recettes" : "Journal des Depenses"}
-          </button>
-        ))}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit shrink-0">
+          {(["recettes", "depenses"] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              style={tab === t ? { color: etabColor } : {}}>
+              {t === "recettes" ? "Journal des Recettes" : "Journal des Depenses"}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 w-full md:w-auto">
+          <select value={filterType} onChange={e => setFilterType(e.target.value as any)}
+            className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+            <option value="jour">Par Jour</option>
+            <option value="mois">Par Mois</option>
+            <option value="annee">Par Année</option>
+          </select>
+          {filterType === "jour" && (
+            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none" />
+          )}
+          {filterType === "mois" && (
+            <>
+              <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                {["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"].map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </>
+          )}
+          {filterType === "annee" && (
+            <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+              {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+        </div>
       </div>
 
       {tab === "recettes" && (
@@ -136,7 +190,7 @@ export default function JournalPage() {
                     ))}</tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {paiements.map((r, i) => (
+                    {filteredPaiements.map((r, i) => (
                       <tr key={r.id || r._id || i} className="hover:bg-emerald-50/30">
                         <td className="px-4 py-3 text-xs text-slate-500">{r.date}</td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-400">{r.reference || "—"}</td>
@@ -158,7 +212,7 @@ export default function JournalPage() {
                 </table>
               </div>
               <div className="md:hidden divide-y divide-slate-100">
-                {paiements.map((r, i) => (
+                {filteredPaiements.map((r, i) => (
                   <div key={r.id || r._id || i} className="p-4 space-y-1">
                     <div className="flex justify-between"><span className="font-semibold text-slate-900 text-sm">{r.etudiantNom}</span><span className="font-bold text-emerald-700">{formatMGA(r.montant)}</span></div>
                     <div className="flex gap-2 text-xs text-slate-400"><span>{r.date}</span>{r.note && <span>{r.note}</span>}<span>{r.agentNom}</span></div>

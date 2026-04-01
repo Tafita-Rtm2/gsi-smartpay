@@ -8,15 +8,16 @@ import {
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS, Etablissement, Role, formatMGA } from "@/lib/data";
 import {
-  fetchStudents, fetchEcolages, fetchPaiements,
-  DBStudent, DBEcolage, DBPaiement,
+  fetchStudents, fetchEcolages, fetchPaiements, fetchRequests,
+  updateRequest, updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
+  DBStudent, DBEcolage, DBPaiement, DBRequest,
   getStudentId, getStudentName
 } from "@/lib/api";
 import clsx from "clsx";
 
 const ETAB_LIST = Object.entries(ETABLISSEMENTS) as [Etablissement, typeof ETABLISSEMENTS[Etablissement]][];
 const ROLES: Role[] = ["comptable", "agent"];
-type Tab = "apercu" | "utilisateurs" | "etudiants" | "paiements";
+type Tab = "apercu" | "utilisateurs" | "etudiants" | "paiements" | "approbations";
 
 export default function AdminPage() {
   const { appState, createUser, updateUser, deleteUser, refreshState } = useAuth();
@@ -26,6 +27,7 @@ export default function AdminPage() {
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
   const [paiements, setPaiements] = useState<DBPaiement[]>([]);
+  const [requests,  setRequests]  = useState<DBRequest[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [timeScale, setTimeScale] = useState<"jour" | "mois" | "annee">("mois");
 
@@ -47,8 +49,8 @@ export default function AdminPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
-      setStudents(s); setEcolages(e); setPaiements(p);
+      const [s, e, p, r] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements(), fetchRequests()]);
+      setStudents(s); setEcolages(e); setPaiements(p); setRequests(r);
       await refreshState(); // Charger aussi les comptes staff
     } catch (err) {
       console.error("Erreur de chargement admin:", err);
@@ -120,11 +122,81 @@ export default function AdminPage() {
     return { id, info, students: etabStudents.length, users: users.length, totalPaye, totalDu, taux: totalDu > 0 ? Math.round((totalPaye/totalDu)*100) : 0, countPaye, countImpaye };
   });
 
-  const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  const handleApproveRequest = async (req: DBRequest) => {
+    if (!confirm("Approuver cette demande ?")) return;
+    setLoading(true);
+    const reqId = req.id || req._id || "";
+    try {
+      if (req.type === "update_ecolage") {
+        const ec = ecolages.find(e => (e.id || e._id) === req.targetId);
+        if (ec) {
+          const newDu = req.payload.montantDu;
+          const st = ec.montantPaye >= newDu ? "paye" : ec.montantPaye > 0 ? "en_attente" : "impaye";
+          await updateEcolage(req.targetId, { montantDu: newDu, statut: st });
+        }
+      } else if (req.type === "delete_ecolage") {
+        await deleteEcolage(req.targetId);
+        // Also delete associated payments
+        const toDelete = paiements.filter(p => p.etudiantId === req.payload.etudiantId);
+        for (const p of toDelete) {
+          const pid = p.id || p._id;
+          if (pid) await deletePaiement(pid);
+        }
+      } else if (req.type === "update_paiement") {
+        const oldP = paiements.find(p => (p.id || p._id) === req.targetId);
+        if (oldP) {
+          await updatePaiement(req.targetId, req.payload);
+          // Update ecolage balance
+          const ec = ecolages.find(e => e.etudiantId === oldP.etudiantId);
+          if (ec) {
+            const diff = req.payload.montant - oldP.montant;
+            const newTotal = ec.montantPaye + diff;
+            const st = newTotal >= ec.montantDu ? "paye" : newTotal > 0 ? "en_attente" : "impaye";
+            await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
+          }
+        }
+      } else if (req.type === "delete_paiement") {
+        await deletePaiement(req.targetId);
+        const ec = ecolages.find(e => e.etudiantId === req.payload.etudiantId);
+        if (ec) {
+          const newTotal = Math.max(0, ec.montantPaye - req.payload.montant);
+          const st = newTotal >= ec.montantDu ? "paye" : newTotal > 0 ? "en_attente" : "impaye";
+          await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
+        }
+      }
+
+      await updateRequest(reqId, {
+        status: "approved",
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: "admin"
+      });
+      alert("Demande approuvée avec succès.");
+      await load();
+    } catch (e) {
+      alert("Erreur lors de l'approbation.");
+    }
+    setLoading(false);
+  };
+
+  const handleRejectRequest = async (reqId: string) => {
+    if (!confirm("Rejeter cette demande ?")) return;
+    setLoading(true);
+    await updateRequest(reqId, {
+      status: "rejected",
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: "admin"
+    });
+    alert("Demande rejetée.");
+    await load();
+    setLoading(false);
+  };
+
+  const TABS: { id: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
     { id: "apercu",       label: "Aperçu",           icon: BarChart3    },
     { id: "utilisateurs", label: "Collaborateurs",    icon: Users        },
     { id: "etudiants",    label: "Étudiants",        icon: GraduationCap},
     { id: "paiements",    label: "Paiements",        icon: CreditCard   },
+    { id: "approbations", label: "Approbations",     icon: Shield,      badge: requests.filter(r => r.status === "pending").length },
   ];
 
   return (
@@ -150,11 +222,16 @@ export default function AdminPage() {
       </div>
 
       <div className="flex gap-1 bg-slate-200/50 border border-slate-200 rounded-2xl p-1 overflow-x-auto">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {TABS.map(({ id, label, icon: Icon, badge }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={clsx("flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all",
+            className={clsx("flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all relative",
               tab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800")}>
             <Icon size={16} />{label}
+            {badge ? (
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm">
+                {badge}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -292,6 +369,88 @@ export default function AdminPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── APPROBATIONS ── */}
+      {tab === "approbations" && (
+        <div className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>{["Date","Agent","Type","Description","Action",""].map(h => (
+                    <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {requests.filter(r => r.status === "pending").length === 0 ? (
+                    <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400 italic">Aucune demande en attente</td></tr>
+                  ) : requests.filter(r => r.status === "pending").map(r => (
+                    <tr key={r.id || r._id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 text-xs text-slate-500">{new Date(r.createdAt || "").toLocaleDateString()}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900">{r.agentNom} <br/> <span className="text-[10px] font-black uppercase text-slate-400">{r.campus}</span></td>
+                      <td className="px-6 py-4">
+                        <span className={clsx("text-[10px] font-black uppercase px-2 py-1 rounded-lg",
+                          r.type.includes("delete") ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
+                          {r.type.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-600 max-w-xs">{r.description}</td>
+                      <td className="px-6 py-4">
+                        <div className="text-[10px] font-mono bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          {JSON.stringify(r.payload)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          <button onClick={() => handleApproveRequest(r)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase">
+                            Approuver
+                          </button>
+                          <button onClick={() => handleRejectRequest(r.id || r._id || "")}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase">
+                            Rejeter
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <h3 className="text-slate-900 font-black text-lg mt-8 mb-4">Historique des demandes</h3>
+          <div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm opacity-70">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>{["Date","Agent","Type","Statut","Révisé le"].map(h => (
+                    <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {requests.filter(r => r.status !== "pending").length === 0 ? (
+                    <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic">Historique vide</td></tr>
+                  ) : requests.filter(r => r.status !== "pending").sort((a,b) => (b.reviewedAt||"").localeCompare(a.reviewedAt||"")).map(r => (
+                    <tr key={r.id || r._id}>
+                      <td className="px-6 py-4 text-xs text-slate-500">{new Date(r.createdAt || "").toLocaleDateString()}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900 text-xs">{r.agentNom}</td>
+                      <td className="px-6 py-4 text-[10px] font-black uppercase text-slate-500">{r.type.replace("_", " ")}</td>
+                      <td className="px-6 py-4">
+                        <span className={clsx("text-[10px] font-black uppercase px-2 py-1 rounded-lg",
+                          r.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                          {r.status === "approved" ? "Approuvé" : "Rejeté"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-400">{r.reviewedAt ? new Date(r.reviewedAt).toLocaleString() : "—"}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

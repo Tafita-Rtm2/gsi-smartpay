@@ -4,6 +4,7 @@ import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, Ale
 import { useAuth } from "@/lib/auth";
 import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
+import clsx from "clsx";
 
 const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
@@ -14,12 +15,19 @@ export default function PaiementsPage() {
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState("");
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]);
+  const [filterMonth, setFilterMonth] = useState(MOIS[new Date().getMonth()]);
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const [filterType, setFilterType] = useState<"jour" | "mois" | "annee">("mois");
+  const [selectedNiveaux, setSelectedNiveaux] = useState<string[]>([]);
+
   const [showModal, setShowModal] = useState(false);
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
   const [saving,    setSaving]    = useState(false);
   const [formError, setFormError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<DBPaiement | null>(null);
   const [deleting,  setDeleting]  = useState(false);
+  const [approvalDesc, setApprovalDesc] = useState("");
 
   // Student picker
   const [showStudentPicker, setShowStudentPicker] = useState(false);
@@ -32,6 +40,9 @@ export default function PaiementsPage() {
     annee:   String(new Date().getFullYear()),
     montant: "",
     date:    new Date().toISOString().split("T")[0],
+    mode:    "Especes",
+    transactionRef: "",
+    preuve:  "",
     note:    "",
   });
 
@@ -60,7 +71,20 @@ export default function PaiementsPage() {
 
   const filtered = paiements.filter(p => {
     const q = search.toLowerCase();
-    return (p.etudiantNom || "").toLowerCase().includes(q) || (p.reference || "").toLowerCase().includes(q);
+    const matchSearch = (p.etudiantNom || "").toLowerCase().includes(q) || (p.reference || "").toLowerCase().includes(q);
+
+    let matchTime = false;
+    if (filterType === "jour") {
+      matchTime = p.date === filterDate;
+    } else if (filterType === "mois") {
+      matchTime = !!(p.note?.includes(filterMonth) && p.note?.includes(filterYear));
+    } else {
+      matchTime = !!p.note?.includes(filterYear);
+    }
+
+    const matchNiveau = selectedNiveaux.length === 0 || selectedNiveaux.includes(p.classe || "");
+
+    return matchSearch && matchTime && matchNiveau;
   });
 
   const filteredStudents = students.filter(s => {
@@ -96,7 +120,9 @@ export default function PaiementsPage() {
       classe:      selectedStudent.niveau || "L1",
       montant,
       date:        form.date,
-      mode:        "Especes",
+      mode:        form.mode,
+      transactionRef: form.transactionRef,
+      preuve:      form.preuve,
       agentId:     currentUser?.id || "",
       agentNom:    `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
       note,
@@ -115,39 +141,63 @@ export default function PaiementsPage() {
     setShowModal(false);
     setSelectedStudent(null);
     setStudentSearch("");
-    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
+    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "" });
   };
 
   const handleEdit = async () => {
     if (!editingPaiement || !form.montant || Number(form.montant) <= 0) {
       setFormError("Montant invalide"); return;
     }
+    if (!isAdmin && !approvalDesc) {
+      setFormError("Veuillez fournir une description pour la demande de modification"); return;
+    }
     setSaving(true);
     const id = editingPaiement.id || editingPaiement._id || "";
     const newMontant = Number(form.montant);
     const note = `${form.mois} ${form.annee}${form.note ? " — " + form.note : ""}`;
 
-    // Update payment record
-    await updatePaiement(id, {
-      montant: newMontant,
-      date: form.date,
-      note,
-    });
+    if (isAdmin) {
+      // Update payment record directly
+      await updatePaiement(id, {
+        montant: newMontant,
+        date: form.date,
+      mode: form.mode,
+      transactionRef: form.transactionRef,
+      preuve: form.preuve,
+        note,
+      });
 
-    // Update student's total paid in ecolage record
-    const ec = ecolages.find(e => e.etudiantId === editingPaiement.etudiantId);
-    if (ec && (ec.id || ec._id)) {
-      const difference = newMontant - editingPaiement.montant;
-      const newTotalPaye = ec.montantPaye + difference;
-      const newStatut: "paye"|"impaye"|"en_attente" =
-        newTotalPaye >= ec.montantDu ? "paye" : newTotalPaye > 0 ? "en_attente" : "impaye";
-      await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotalPaye, statut: newStatut });
+      // Update student's total paid in ecolage record
+      const ec = ecolages.find(e => e.etudiantId === editingPaiement.etudiantId);
+      if (ec && (ec.id || ec._id)) {
+        const difference = newMontant - editingPaiement.montant;
+        const newTotalPaye = ec.montantPaye + difference;
+        const newStatut: "paye"|"impaye"|"en_attente" =
+          newTotalPaye >= ec.montantDu ? "paye" : newTotalPaye > 0 ? "en_attente" : "impaye";
+        await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotalPaye, statut: newStatut });
+      }
+    } else {
+      // Create a request for approval
+      const { createRequest } = await import("@/lib/api");
+      await createRequest({
+        type: "update_paiement",
+        collection: "paiements",
+        targetId: id,
+        payload: { montant: newMontant, date: form.date, note },
+        description: approvalDesc,
+        agentId: currentUser?.id || "",
+        agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
+        campus: currentUser?.etablissement || "",
+        status: "pending"
+      });
+      alert("Votre demande de modification a été envoyée pour approbation.");
     }
 
     await load();
     setSaving(false);
     setEditingPaiement(null);
-    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "" });
+    setApprovalDesc("");
+    setForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "" });
   };
 
   const openEdit = (p: DBPaiement) => {
@@ -174,30 +224,52 @@ export default function PaiementsPage() {
       annee: y,
       montant: String(p.montant),
       date: p.date,
+      mode: p.mode,
+      transactionRef: p.transactionRef || "",
+      preuve: p.preuve || "",
       note: noteTxt,
     });
   };
 
   const handleDelete = async () => {
     if (!deleteConfirm) return;
+    if (!isAdmin && !approvalDesc) {
+      setFormError("Veuillez fournir une description pour la demande de suppression"); return;
+    }
     setDeleting(true);
     const id = deleteConfirm.id || deleteConfirm._id || "";
     if (id) {
-      await deletePaiement(id);
-
-      // Reverse the ecolage payment
-      const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
-      if (ec && (ec.id || ec._id)) {
-        const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
-        const newStatut: "paye"|"impaye"|"en_attente" =
-          newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
-        await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
+      if (isAdmin) {
+        await deletePaiement(id);
+        // Reverse the ecolage payment
+        const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
+        if (ec && (ec.id || ec._id)) {
+          const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
+          const newStatut: "paye"|"impaye"|"en_attente" =
+            newPaye >= ec.montantDu ? "paye" : newPaye > 0 ? "en_attente" : "impaye";
+          await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
+        }
+      } else {
+        const { createRequest } = await import("@/lib/api");
+        await createRequest({
+          type: "delete_paiement",
+          collection: "paiements",
+          targetId: id,
+          payload: { montant: deleteConfirm.montant, etudiantId: deleteConfirm.etudiantId },
+          description: approvalDesc,
+          agentId: currentUser?.id || "",
+          agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
+          campus: currentUser?.etablissement || "",
+          status: "pending"
+        });
+        alert("Votre demande de suppression a été envoyée pour approbation.");
       }
     }
 
     await load();
     setDeleting(false);
     setDeleteConfirm(null);
+    setApprovalDesc("");
   };
 
   return (
@@ -208,6 +280,27 @@ export default function PaiementsPage() {
           <p className="text-sm text-slate-500 mt-0.5">{loading ? "Chargement..." : `${paiements.length} paiements`}</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
+          <button onClick={() => {
+            const headers = ["Reference", "Date", "Etudiant", "Matricule", "Filiere", "Niveau", "Montant", "Note", "Agent", "Mode"];
+            const rows = filtered.map(p => [
+              p.reference || "", p.date, p.etudiantNom, p.matricule || "", p.filiere, p.classe, p.montant, p.note || "", p.agentNom, p.mode
+            ]);
+            const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(";")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `paiements_${filterType}_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            Exporter Excel
+          </button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            Imprimer
+          </button>
           <button onClick={load} className="flex items-center gap-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
@@ -226,13 +319,60 @@ export default function PaiementsPage() {
         <div className="card"><div className="text-xl font-bold text-slate-900">{students.length}</div><div className="text-xs text-slate-400 mt-0.5">Etudiants</div></div>
       </div>
 
-      {/* Search */}
-      <div className="card">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Rechercher par etudiant ou reference..." value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+      {/* Search & Filters */}
+      <div className="card space-y-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Rechercher par étudiant ou référence..." value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+          </div>
+          <div className="flex gap-2">
+            <select value={filterType} onChange={e => setFilterType(e.target.value as any)}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+              <option value="jour">Par Jour</option>
+              <option value="mois">Par Mois</option>
+              <option value="annee">Par Année</option>
+            </select>
+            {filterType === "jour" && (
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none" />
+            )}
+            {filterType === "mois" && (
+              <>
+                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                  {MOIS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                  className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                  {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            )}
+            {filterType === "annee" && (
+              <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none">
+                {["2024", "2025", "2026"].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+          <span className="text-xs font-bold text-slate-400 uppercase mr-2 flex items-center">Niveaux :</span>
+          {["L1", "L2", "L3", "M1", "M2"].map(n => (
+            <button key={n}
+              onClick={() => setSelectedNiveaux(prev => prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n])}
+              className={clsx("px-3 py-1 rounded-full text-xs font-bold transition-all border",
+                selectedNiveaux.includes(n) ? "bg-brand-600 text-white border-brand-600" : "bg-white text-slate-500 border-slate-200")}>
+              {n}
+            </button>
+          ))}
+          {selectedNiveaux.length > 0 && (
+            <button onClick={() => setSelectedNiveaux([])} className="text-xs text-brand-600 hover:underline ml-2">Réinitialiser</button>
+          )}
         </div>
       </div>
 
@@ -357,7 +497,19 @@ export default function PaiementsPage() {
                     {(() => {
                       const ec = ecolages.find(e => e.etudiantId === getStudentId(selectedStudent));
                       if (!ec || ec.montantDu === 0) return <div className="text-xs text-amber-600 mt-0.5">Aucun ecolage defini</div>;
-                      return <div className="text-xs text-red-500 mt-0.5">Reste: {formatMGA(ec.montantDu - ec.montantPaye)}</div>;
+              const reste = ec.montantDu - ec.montantPaye;
+              const isPast = new Date(`${form.annee}-${MOIS.indexOf(form.mois) + 1}-01`) < new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+              return (
+                <div className="space-y-1 mt-1">
+                  <div className="text-xs text-red-500 font-bold">RESTE À PAYER : {formatMGA(reste)}</div>
+                  {isPast && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-[10px] text-amber-700">
+                      Note: Vous enregistrez un paiement pour un mois passé ({form.mois} {form.annee}).
+                      Si le plafond était différent, veuillez le modifier dans la fiche étudiant.
+                    </div>
+                  )}
+                </div>
+              );
                     })()}
                   </div>
                   <button onClick={() => setSelectedStudent(null)}
@@ -414,16 +566,36 @@ export default function PaiementsPage() {
               </div>
             </div>
 
-            {/* Mode badge */}
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: etabColor }}>
-                <Check size={12} className="text-white" />
-              </div>
-              <div>
-                <div className="text-xs text-slate-400">Mode de paiement</div>
-                <div className="text-sm font-semibold text-slate-800">Especes</div>
+            {/* Mode de paiement */}
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">Mode de paiement</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {["Especes", "Banque", "Mvola", "Airtel Money", "Orange Money"].map(m => (
+                  <button key={m} type="button" onClick={() => setForm(f=>({...f, mode: m}))}
+                    className={clsx("px-3 py-2 rounded-xl text-xs font-bold border transition-all",
+                      form.mode === m ? "bg-brand-600 text-white border-brand-600 shadow-sm" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50")}>
+                    {m}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {form.mode !== "Especes" && (
+              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Référence Transaction</label>
+                  <input type="text" placeholder="ID de transaction" value={form.transactionRef}
+                    onChange={e => setForm(f=>({...f, transactionRef: e.target.value}))}
+                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Preuve (Lien Image)</label>
+                  <input type="text" placeholder="URL ou base64" value={form.preuve}
+                    onChange={e => setForm(f=>({...f, preuve: e.target.value}))}
+                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                </div>
+              </div>
+            )}
 
             {/* Note */}
             <div>
@@ -432,6 +604,15 @@ export default function PaiementsPage() {
                 onChange={e => setForm(f=>({...f,note:e.target.value}))}
                 className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
             </div>
+
+            {editingPaiement && !isAdmin && (
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5 text-amber-600">Motif de la modification <span className="text-red-500">*</span></label>
+                <textarea placeholder="Expliquez pourquoi vous modifiez ce paiement..." value={approvalDesc}
+                  onChange={e => setApprovalDesc(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-amber-200 bg-amber-50/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 min-h-[80px]" />
+              </div>
+            )}
 
             {formError && <p className="text-red-500 text-xs bg-red-50 border border-red-100 rounded-xl px-3 py-2">{formError}</p>}
 
@@ -544,6 +725,15 @@ export default function PaiementsPage() {
               <div className="text-lg font-bold text-red-700">{formatMGA(deleteConfirm.montant)}</div>
               <div className="text-xs text-slate-400">{deleteConfirm.date} · {deleteConfirm.note || ""}</div>
             </div>
+            {!isAdmin && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-600 block text-amber-600">Motif de la suppression <span className="text-red-500">*</span></label>
+                <textarea placeholder="Expliquez pourquoi vous supprimez ce paiement..." value={approvalDesc}
+                  onChange={e => setApprovalDesc(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-amber-200 bg-amber-50/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 min-h-[80px]" />
+              </div>
+            )}
+            {formError && <p className="text-red-500 text-[10px] font-black uppercase text-center">{formError}</p>}
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)}
                 className="flex-1 py-3 rounded-xl border-2 border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
