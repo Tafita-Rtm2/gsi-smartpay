@@ -18,6 +18,10 @@ export default function RecusPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [pays, studs] = await Promise.all([fetchPaiements(), fetchStudents()]);
+
+    // Sort payments by date (descending)
+    pays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     if (!isAdmin && currentUser) {
       const myEtab = currentUser.etablissement;
       const myIds = new Set(studs.filter(s => (s.campus || "").toLowerCase().includes(myEtab)).map(s => getStudentId(s)));
@@ -109,8 +113,8 @@ export default function RecusPage() {
       )}
 
       {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" id="recu-print">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm no-print">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm only-print-this" id="recu-print">
             <div className="rounded-t-2xl px-6 py-5 text-white" style={{ background: etabInfo?.color || "#2563eb" }}>
               <div className="flex items-center justify-between mb-1">
                 <div className="font-bold text-lg">GSI SmartPay</div>

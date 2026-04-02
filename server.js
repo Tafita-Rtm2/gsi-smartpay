@@ -14,7 +14,8 @@ const app = express();
 const port = process.env.PORT || 3000;
 const SESSION_COOKIE = "gsi_secure_session";
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
 console.log('--- GSI SMARTPAY STARTUP ---');
