@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Download, Printer, GraduationCap, Upload, Eye } from "lucide-react";
+import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Download, Printer, GraduationCap, Upload, Eye, Receipt } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   fetchStudents, fetchOtherPayments, createOtherPayment, deleteOtherPayment,
