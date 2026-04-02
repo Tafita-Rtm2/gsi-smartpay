@@ -683,7 +683,7 @@ export default function EtudiantsPage() {
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>{["Etudiant","Filiere","Niveau","Ecolage","Statut","Actions"].map(h => (
+                  <tr>{["Etudiant","Filiere","Niveau","Total Annuel","Statut","Actions"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 px-4 py-3">{h}</th>
                   ))}</tr>
                 </thead>
@@ -712,11 +712,21 @@ export default function EtudiantsPage() {
                         <td className="px-4 py-3 min-w-[150px]">
                           {ec.montantDu > 0 ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="font-semibold text-slate-700">Total: {formatMGA(ec.montantDu)}</div>
-                              <div className="text-emerald-600">Paye: {formatMGA(ec.montantPaye)}</div>
-                              {ec.montantDu > ec.montantPaye && <div className="text-red-500 font-medium">Reste: {formatMGA(ec.montantDu-ec.montantPaye)}</div>}
+                              <div className="font-black text-slate-900">{formatMGA(ec.montantDu)}</div>
+                              <div className="text-emerald-600 font-medium">Payé: {formatMGA(ec.montantPaye)}</div>
+                              {ec.montantDu > ec.montantPaye && <div className="text-red-500 font-black">Reste: {formatMGA(ec.montantDu-ec.montantPaye)}</div>}
                             </div>
-                          ) : <span className="text-slate-300 text-xs italic">Non defini</span>}
+                          ) : (
+                            <div className="space-y-1">
+                              <span className="text-slate-300 text-[10px] font-black uppercase italic">Non défini</span>
+                              {(() => {
+                                const campus = (s.campus || "").toLowerCase();
+                                const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(s.filiere || "") && p.niveau === (s.niveau || "L1"));
+                                if (config && config.amount > 0) return <div className="text-[10px] font-black text-brand-500 uppercase tracking-tighter">Prévu: {formatMGA(config.amount)}</div>;
+                                return null;
+                              })()}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={clsx("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold", STATUT_COLORS[statut])}>
@@ -885,7 +895,7 @@ export default function EtudiantsPage() {
 
                     <div className="rounded-2xl border border-slate-100 overflow-hidden">
                       <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Ecolage</span>
+                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Scolarité Annuelle</span>
                         <div className="flex gap-2">
                           {getEcolage(profileStudent) && (
                             <button onClick={() => { openEditEcolage(getEcolage(profileStudent)!); setProfileStudent(null); }}
@@ -898,16 +908,47 @@ export default function EtudiantsPage() {
                         </div>
                       </div>
                       {ec.montantDu > 0 ? (
-                        <div className="px-4 py-3 grid grid-cols-3 gap-3 text-center">
-                          {[
-                            { label: "Total du", value: formatMGA(ec.montantDu), color: "text-slate-700" },
-                            { label: "Paye", value: formatMGA(ec.montantPaye), color: "text-emerald-600" },
-                            { label: "Reste", value: formatMGA(ec.montantDu-ec.montantPaye), color: ec.montantDu>ec.montantPaye?"text-red-600":"text-emerald-600" },
-                          ].map(({ label, value, color }) => (
-                            <div key={label}><div className={`text-sm font-bold ${color}`}>{value}</div><div className="text-xs text-slate-400 mt-0.5">{label}</div></div>
-                          ))}
+                        <div className="p-4 space-y-4">
+                          <div className="grid grid-cols-3 gap-3 text-center">
+                            {[
+                              { label: "Total dû", value: formatMGA(ec.montantDu), color: "text-slate-900" },
+                              { label: "Payé", value: formatMGA(ec.montantPaye), color: "text-emerald-600" },
+                              { label: "Reste", value: formatMGA(ec.montantDu-ec.montantPaye), color: ec.montantDu>ec.montantPaye?"text-red-600":"text-emerald-600" },
+                            ].map(({ label, value, color }) => (
+                              <div key={label}><div className={`text-xs font-black ${color}`}>{value}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-tighter">{label}</div></div>
+                            ))}
+                          </div>
+                          {(() => {
+                            const campus = (profileStudent.campus || "").toLowerCase();
+                            const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(profileStudent.filiere || "") && p.niveau === (profileStudent.niveau || "L1"));
+                            if (config && config.amount > 0 && config.amount !== ec.montantDu) {
+                              return (
+                                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] font-bold text-amber-700 animate-pulse">
+                                  <AlertTriangle size={14} className="shrink-0" />
+                                  <p>Attention: Le total dû actuel ({formatMGA(ec.montantDu)}) diffère du tarif configuré pour ce niveau ({formatMGA(config.amount)}).</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
-                      ) : <div className="px-4 py-3 text-center text-slate-400 text-xs">Aucun ecolage fini</div>}
+                      ) : (
+                        <div className="px-4 py-6 text-center space-y-2">
+                          <div className="text-slate-400 text-xs font-medium italic">Aucun dossier d&apos;écolage initialisé.</div>
+                          {(() => {
+                            const campus = (profileStudent.campus || "").toLowerCase();
+                            const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(profileStudent.filiere || "") && p.niveau === (profileStudent.niveau || "L1"));
+                            if (config && config.amount > 0) {
+                              return (
+                                <div className="inline-block px-4 py-2 bg-brand-50 text-brand-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-brand-100">
+                                  Tarif prévu: {formatMGA(config.amount)}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-3">
@@ -1266,7 +1307,10 @@ export default function EtudiantsPage() {
                 </div>
 
                 <div className="bg-brand-50 border border-brand-100 rounded-2xl p-5 mb-6">
-                  <div className="text-[10px] font-black uppercase text-brand-600 mb-3 tracking-widest">Action groupée (Ultra rapide)</div>
+                  <div className="text-[10px] font-black uppercase text-brand-600 mb-3 tracking-widest flex items-center justify-between">
+                    <span>Mise à jour rapide par niveau</span>
+                    <span className="bg-brand-600 text-white px-2 py-0.5 rounded text-[9px] lowercase font-medium">Auto-calcul</span>
+                  </div>
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex gap-1 bg-white p-1 rounded-lg border border-brand-200">
                       {["L1", "L2", "L3", "M1", "M2"].map(lvl => (
@@ -1300,11 +1344,12 @@ export default function EtudiantsPage() {
                   {["L1", "L2", "L3", "M1", "M2"].map(niv => {
                     const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === currentFiliere && p.niveau === niv);
                     return (
-                      <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all">
+                      <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all relative overflow-hidden">
+                        {config && config.amount > 0 && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
                         <div className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Niveau {niv}</div>
                         <div className="space-y-4">
                           <div className="relative">
-                            <label className="text-[9px] font-black text-slate-400 block mb-1">TOTAL ANNUEL</label>
+                            <label className="text-[9px] font-black text-slate-400 block mb-1">TOTAL ANNUEL (Dû)</label>
                             <input type="number" placeholder="0"
                               value={config?.amount || ""}
                               onChange={e => setProgramFee(currentUser!.etablissement, currentFiliere, Number(e.target.value), niv, config?.monthlyAmount)}
