@@ -46,7 +46,8 @@ export default function RapportsPage() {
   const totalDepenses = myExpenses.reduce((s,e)=>s+e.montant,0);
   const resultatNet   = totalEncaisse - totalDepenses;
   const totalDu       = ecolages.reduce((s,e)=>s+e.montantDu,0);
-  const tauxGlobal    = totalDu>0 ? Math.round((totalEncaisse/totalDu)*100) : 0;
+  const totalPayeEcolage = ecolages.reduce((s,e)=>s+e.montantPaye,0);
+  const tauxGlobal    = totalDu>0 ? Math.round((totalPayeEcolage/totalDu)*100) : 0;
   const studentsImpaye  = students.filter(s => { const ec=ecolages.find(e=>e.etudiantId===getStudentId(s)); return !ec||ec.statut==="impaye"; });
   const studentsPending = students.filter(s => { const ec=ecolages.find(e=>e.etudiantId===getStudentId(s)); return ec?.statut==="en_attente"; });
 
@@ -194,17 +195,51 @@ export default function RapportsPage() {
       {/* ── Compte de resultat ── */}
       {activeTab==="resultat" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              {label:"Total Recettes",  value:formatMGA(totalEncaisse), color:"text-emerald-700", bg:"bg-emerald-50", border:"border-emerald-100"},
-              {label:"Total Depenses",  value:formatMGA(totalDepenses), color:"text-red-700",     bg:"bg-red-50",     border:"border-red-100"},
-              {label:"Resultat Net",    value:formatMGA(resultatNet),   color:resultatNet>=0?"text-brand-700":"text-red-700", bg:"bg-brand-50", border:"border-brand-100"},
+              {label:"Recettes Scolaires", value:formatMGA(totalPayeEcolage), color:"text-emerald-700", bg:"bg-emerald-50", border:"border-emerald-100"},
+              {label:"Recettes Totales",  value:formatMGA(totalEncaisse), color:"text-emerald-700", bg:"bg-emerald-50", border:"border-emerald-100"},
+              {label:"Total Dépenses",   value:formatMGA(totalDepenses), color:"text-red-700",     bg:"bg-red-50",     border:"border-red-100"},
+              {label:"Résultat Net",     value:formatMGA(resultatNet),   color:resultatNet>=0?"text-brand-700":"text-red-700", bg:"bg-brand-50", border:"border-brand-100"},
             ].map(({label,value,color,bg,border})=>(
               <div key={label} className={`card border ${border} ${bg}`}>
-                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</div>
-                <div className={`text-2xl font-bold ${color}`}>{value}</div>
+                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
+                <div className={`text-xl font-black ${color} tracking-tight`}>{value}</div>
               </div>
             ))}
+          </div>
+
+          <div className="card border-2 border-brand-100 bg-brand-50/20">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Bilan Annuel Global</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Projection sur l&apos;année scolaire en cours</p>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-black text-brand-600 tracking-tight">{tauxGlobal}%</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Recouvrement</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+              <div className="space-y-1">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Attendu (Scolarité)</div>
+                <div className="text-lg font-black text-slate-900">{formatMGA(totalDu)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Réalisé (Encaissé)</div>
+                <div className="text-lg font-black text-emerald-600">{formatMGA(totalPayeEcolage)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-[10px] font-black text-red-400 uppercase tracking-widest">Restant à percevoir</div>
+                <div className="text-lg font-black text-red-600">{formatMGA(totalDu - totalPayeEcolage)}</div>
+              </div>
+            </div>
+            <div className="h-4 bg-white border border-brand-100 rounded-full overflow-hidden p-1 shadow-inner">
+              <div className="h-full rounded-full transition-all duration-1000 ease-out flex items-center justify-center text-[8px] font-black text-white"
+                style={{ width: `${tauxGlobal}%`, background: `linear-gradient(90deg, ${etabColor}, #10b981)` }}>
+                {tauxGlobal > 10 ? `${tauxGlobal}%` : ""}
+              </div>
+            </div>
           </div>
 
           {/* Custom bar chart - NO Recharts (causes blue bug) */}
