@@ -90,12 +90,13 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Stat cards — only 3, no "impaye" card with negative icon */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {[
-              { label: "Total encaisse",     value: formatMGA(totalEncaisse), icon: TrendingUp,   color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
+              { label: "Total encaissé",     value: formatMGA(totalEncaisse), icon: TrendingUp,   color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
+              { label: "CA Annuel Prévu",    value: formatMGA(totalDu),       icon: CreditCard,   color: "text-brand-600",   bg: "bg-brand-50",   border: "border-brand-100"   },
               { label: "Taux recouvrement",  value: `${taux}%`,               icon: CheckCircle2, color: "text-brand-600",   bg: "bg-brand-50",   border: "border-brand-100"   },
-              { label: "Total etudiants",    value: students.length.toString(),icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100"  },
-              { label: "Paiements",          value: paiements.length.toString(),icon: CreditCard,  color: "text-slate-600",   bg: "bg-slate-50",   border: "border-slate-200"   },
+              { label: "Total étudiants",    value: students.length.toString(),icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100"  },
+              { label: "Transactions",       value: paiements.length.toString(),icon: CreditCard,  color: "text-slate-600",   bg: "bg-slate-50",   border: "border-slate-200"   },
             ].map(({ label, value, icon: Icon, color, bg, border }) => (
               <div key={label} className={`card border ${border}`}>
                 <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mb-3`}>
