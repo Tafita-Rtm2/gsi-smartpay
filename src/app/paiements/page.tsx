@@ -182,7 +182,7 @@ export default function PaiementsPage() {
     const montant = Number(form.montant);
     const note = `${form.mois} ${form.annee}${form.note ? " — " + form.note : ""}`;
 
-    await createPaiement({
+    const newPaiement = await createPaiement({
       etudiantId:  getStudentId(selectedStudent),
       etudiantNom: getStudentName(selectedStudent),
       matricule:   selectedStudent.matricule || "",
@@ -199,6 +199,12 @@ export default function PaiementsPage() {
       agentNom:    `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
       note,
     });
+
+    if (!newPaiement) {
+      setFormError("Erreur lors de l'enregistrement du paiement. L'image est peut-être trop volumineuse.");
+      setSaving(false);
+      return;
+    }
 
     if (ec && (ec.id || ec._id)) {
       const newPaye = ec.montantPaye + montant;
@@ -671,45 +677,45 @@ export default function PaiementsPage() {
               </div>
             </div>
 
-            {form.mode !== "Especes" && (
-              <div className="space-y-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-in zoom-in-95 duration-300">
+            <div className="space-y-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-in zoom-in-95 duration-300">
+              {form.mode !== "Especes" && (
                 <div>
                   <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">Référence de Transaction</label>
                   <input type="text" placeholder="Ex: ID Mvola, Ref Virement..." value={form.transactionRef}
                     onChange={e => setForm(f=>({...f, transactionRef: e.target.value}))}
                     className="w-full px-4 py-2.5 text-xs font-bold border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
                 </div>
+              )}
 
-                <div>
-                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">Preuve / Justificatif</label>
-                  <div className="flex items-center gap-3">
-                    <label className="flex-1 flex items-center justify-center gap-3 px-4 py-3 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 cursor-pointer hover:border-brand-500 hover:text-brand-600 transition-all">
-                      <Upload size={18} />
-                      <span className="text-[10px] font-black uppercase truncate max-w-[180px]">
-                        {form.preuveFilename || "Uploader Image / Caméra"}
-                      </span>
-                      <input type="file" className="hidden" accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = () => setForm(f => ({ ...f, preuve: reader.result as string, preuveFilename: file.name }));
-                            reader.readAsDataURL(file);
-                          }
-                        }} />
-                    </label>
-                    {form.preuve && (
-                      <button type="button" onClick={() => {
-                        const win = window.open();
-                        if (win) win.document.write(`<img src="${form.preuve}" style="max-width:100%; border-radius: 12px; shadow: 0 10px 30px rgba(0,0,0,0.2)">`);
-                      }} className="p-3 bg-brand-50 text-brand-600 rounded-xl border border-brand-100 shadow-sm transition-transform active:scale-90">
-                        <Eye size={20} />
-                      </button>
-                    )}
-                  </div>
+              <div>
+                <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">Preuve / Justificatif</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 flex items-center justify-center gap-3 px-4 py-3 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 cursor-pointer hover:border-brand-500 hover:text-brand-600 transition-all">
+                    <Upload size={18} />
+                    <span className="text-[10px] font-black uppercase truncate max-w-[180px]">
+                      {form.preuveFilename || "Uploader Image / Caméra"}
+                    </span>
+                    <input type="file" className="hidden" accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => setForm(f => ({ ...f, preuve: reader.result as string, preuveFilename: file.name }));
+                          reader.readAsDataURL(file);
+                        }
+                      }} />
+                  </label>
+                  {form.preuve && (
+                    <button type="button" onClick={() => {
+                      const win = window.open();
+                      if (win) win.document.write(`<img src="${form.preuve}" style="max-width:100%; border-radius: 12px; shadow: 0 10px 30px rgba(0,0,0,0.2)">`);
+                    }} className="p-3 bg-brand-50 text-brand-600 rounded-xl border border-brand-100 shadow-sm transition-transform active:scale-90">
+                      <Eye size={20} />
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Note */}
             <div>

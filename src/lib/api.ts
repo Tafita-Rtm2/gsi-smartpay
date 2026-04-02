@@ -73,6 +73,7 @@ export interface DBPaiement {
 export interface DBOtherPayment {
   id?: string;
   _id?: string;
+  reference?: string;
   etudiantId: string;
   etudiantNom: string;
   matricule?: string;
@@ -86,6 +87,9 @@ export interface DBOtherPayment {
   agentId: string;
   agentNom: string;
   note?: string;
+  preuve?: string;
+  preuveFilename?: string;
+  transactionRef?: string;
   createdAt?: string;
 }
 
@@ -249,7 +253,9 @@ export async function fetchOtherPayments(): Promise<DBOtherPayment[]> {
 }
 
 export async function createOtherPayment(data: Omit<DBOtherPayment, "id" | "_id">): Promise<DBOtherPayment | null> {
-  return apiPost<DBOtherPayment>("autres_paiements", { ...data, createdAt: new Date().toISOString() });
+  const prefix = (data.campus || "GSI").slice(0, 3).toUpperCase();
+  const reference = `DIV-${prefix}-${Date.now().toString().slice(-6)}`;
+  return apiPost<DBOtherPayment>("autres_paiements", { ...data, reference, createdAt: new Date().toISOString() });
 }
 
 export async function deleteOtherPayment(id: string): Promise<boolean> {

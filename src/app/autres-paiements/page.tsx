@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Download, Printer, GraduationCap } from "lucide-react";
+import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Download, Printer, GraduationCap, Upload, Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
   fetchStudents, fetchOtherPayments, createOtherPayment, deleteOtherPayment,
@@ -62,8 +62,13 @@ export default function AutresPaiementsPage() {
     montant: "",
     date: new Date().toISOString().split("T")[0],
     mode: "Especes",
+    transactionRef: "",
+    preuve: "",
+    preuveFilename: "",
     note: "",
   });
+
+  const [preview, setPreview] = useState<DBOtherPayment | null>(null);
 
   const isAdmin = currentUser?.role === "admin";
   const etabColor = currentUser ? ETABLISSEMENTS[currentUser.etablissement]?.color || "#2563eb" : "#2563eb";
@@ -125,7 +130,7 @@ export default function AutresPaiementsPage() {
     if (!form.libelle) { setFormError("Libellé requis"); return; }
     if (!form.montant || Number(form.montant) <= 0) { setFormError("Montant invalide"); return; }
     setSaving(true);
-    await createOtherPayment({
+    const res = await createOtherPayment({
       etudiantId: getStudentId(selectedStudent),
       etudiantNom: getStudentName(selectedStudent),
       matricule: selectedStudent.matricule || "",
@@ -136,17 +141,26 @@ export default function AutresPaiementsPage() {
       montant: Number(form.montant),
       date: form.date,
       mode: form.mode,
+      transactionRef: form.transactionRef,
+      preuve: form.preuve,
+      preuveFilename: form.preuveFilename,
       agentId: currentUser?.id || "",
       agentNom: `${currentUser?.prenom || ""} ${currentUser?.nom || ""}`.trim(),
       note: form.note,
     });
+
+    if (!res) {
+      setFormError("Erreur lors de l'enregistrement. L'image est peut-être trop lourde.");
+      setSaving(false);
+      return;
+    }
 
     showAlert("Succès", "Le paiement a été enregistré.", "success");
     await load();
     setSaving(false);
     setShowModal(false);
     setSelectedStudent(null);
-    setForm({ libelle: "", montant: "", date: new Date().toISOString().split("T")[0], mode: "Especes", note: "" });
+    setForm({ libelle: "", montant: "", date: new Date().toISOString().split("T")[0], mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "", note: "" });
   };
 
   const handleDelete = async () => {
@@ -263,34 +277,52 @@ export default function AutresPaiementsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>{["Étudiant", "Libellé", "Montant", "Date", "Mode", "Agent", ""].map(h => (
+                <tr>{["Ref", "Étudiant", "Libellé", "Montant", "Date", "Mode", ""].map(h => (
                   <th key={h} className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400 px-6 py-4">{h}</th>
                 ))}</tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map((p, i) => (
                   <tr key={p.id || p._id || i} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-6 py-4 font-mono text-[10px] font-bold text-brand-600 uppercase">{p.reference || "—"}</td>
                     <td className="px-6 py-4 font-bold text-slate-900">{p.etudiantNom}</td>
                     <td className="px-6 py-4 text-slate-700 font-medium">{p.libelle}</td>
                     <td className="px-6 py-4 font-black text-emerald-700">{formatMGA(p.montant)}</td>
                     <td className="px-6 py-4 text-slate-500 text-xs font-medium">{p.date}</td>
-                    <td className="px-6 py-4 text-slate-500 text-[10px] font-black uppercase">{p.mode}</td>
-                    <td className="px-6 py-4 text-slate-400 text-xs font-semibold">{p.agentNom}</td>
                     <td className="px-6 py-4">
-                      <button onClick={() => {
-                        showConfirm(
-                          "Supprimer ?",
-                          "Voulez-vous supprimer ce paiement ? Cette action est irréversible.",
-                          () => {
-                            setDeleteConfirm(p);
-                            handleDelete();
-                          },
-                          "danger"
-                        );
-                      }}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-500 text-[10px] font-black uppercase">{p.mode}</span>
+                        {p.preuve && (
+                          <button onClick={() => {
+                            const win = window.open();
+                            if (win) win.document.write(`<body style="margin:0; background:#000; display:flex; align-items:center; justify-center"><img src="${p.preuve}" style="max-width:100%; max-height:100vh; margin:auto"></body>`);
+                          }} title="Voir justificatif" className="p-1.5 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 transition-all">
+                            <Eye size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setPreview(p)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-brand-600 hover:bg-brand-50 transition-all border border-transparent hover:border-brand-100">
+                          <Receipt size={14} />
+                        </button>
+                        <button onClick={() => {
+                          showConfirm(
+                            "Supprimer ?",
+                            "Voulez-vous supprimer ce paiement ? Cette action est irréversible.",
+                            () => {
+                              setDeleteConfirm(p);
+                              handleDelete();
+                            },
+                            "danger"
+                          );
+                        }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -383,6 +415,46 @@ export default function AutresPaiementsPage() {
                 </div>
               </div>
 
+              <div className="space-y-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl animate-in zoom-in-95 duration-300">
+                {form.mode !== "Especes" && (
+                  <div>
+                    <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">Référence de Transaction</label>
+                    <input type="text" placeholder="Ex: ID Mvola, Ref Virement..." value={form.transactionRef}
+                      onChange={e => setForm(f=>({...f, transactionRef: e.target.value}))}
+                      className="w-full px-4 py-2.5 text-xs font-bold border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20" />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">Preuve / Justificatif</label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center justify-center gap-3 px-4 py-3 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 cursor-pointer hover:border-brand-500 hover:text-brand-600 transition-all">
+                      <Upload size={18} />
+                      <span className="text-[10px] font-black uppercase truncate max-w-[150px]">
+                        {form.preuveFilename || "Uploader Image"}
+                      </span>
+                      <input type="file" className="hidden" accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => setForm(f => ({ ...f, preuve: reader.result as string, preuveFilename: file.name }));
+                            reader.readAsDataURL(file);
+                          }
+                        }} />
+                    </label>
+                    {form.preuve && (
+                      <button type="button" onClick={() => {
+                        const win = window.open();
+                        if (win) win.document.write(`<img src="${form.preuve}" style="max-width:100%">`);
+                      }} className="p-3 bg-brand-50 text-brand-600 rounded-xl border border-brand-100 shadow-sm transition-transform active:scale-90">
+                        <Eye size={20} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {formError && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-[10px] font-black uppercase tracking-tight text-center">{formError}</div>}
             </div>
 
@@ -395,6 +467,71 @@ export default function AutresPaiementsPage() {
                 className="flex-[1.5] py-4 rounded-2xl text-white text-xs font-black uppercase shadow-xl disabled:opacity-60 flex items-center justify-center gap-3 transition-all active:scale-[0.98]"
                 style={{ background: etabColor }}>
                 {saving ? <><span className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Traitement...</> : <><Check size={18}/> Enregistrer</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── RECEIPT PREVIEW ─── */}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm no-print">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm only-print-this" id="recu-print">
+            <div className="rounded-t-2xl px-6 py-5 text-white" style={{ background: etabColor }}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="font-bold text-lg">GSI SmartPay</div>
+                <div className="text-xs opacity-70 uppercase">Reçu de paiement</div>
+              </div>
+              <div className="text-xs opacity-70">{currentUser?.etablissement || preview.campus}</div>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Référence</span>
+                <span className="font-mono font-bold text-slate-900">{preview.reference || "—"}</span>
+              </div>
+              <div className="h-px bg-slate-100" />
+              <div className="space-y-2 text-sm">
+                {[
+                  { label: "Bénéficiaire", value: preview.etudiantNom },
+                  { label: "Matricule", value: preview.matricule || "—" },
+                  { label: "Libellé", value: preview.libelle },
+                  { label: "Date", value: preview.date },
+                  { label: "Canal", value: preview.mode },
+                  { label: "Agent", value: preview.agentNom },
+                  ...(preview.note ? [{ label: "Note", value: preview.note }] : []),
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between gap-2">
+                    <span className="text-slate-500 shrink-0">{label}</span>
+                    <span className="font-medium text-slate-900 text-right text-xs truncate">{value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="h-px bg-slate-100" />
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600 font-semibold">Montant perçu</span>
+                <span className="text-2xl font-bold" style={{ color: etabColor }}>{formatMGA(preview.montant)}</span>
+              </div>
+
+              {preview.preuve && (
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Justificatif</div>
+                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group relative">
+                    <img src={preview.preuve} alt="Preuve" className="w-full h-auto max-h-[150px] object-contain" />
+                  </div>
+                </div>
+              )}
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2 text-center">
+                <span className="text-emerald-700 font-bold text-sm">Paiement enregistré</span>
+              </div>
+            </div>
+            <div className="px-6 pb-5 flex gap-3">
+              <button onClick={() => setPreview(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                Fermer
+              </button>
+              <button onClick={() => window.print()}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 transition-colors">
+                <Printer size={14} /> Imprimer
               </button>
             </div>
           </div>
