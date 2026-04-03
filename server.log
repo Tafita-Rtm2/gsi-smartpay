@@ -1,6 +1,0 @@
-◇ injecting env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
---- GSI SMARTPAY STARTUP ---
-[INIT] GSI_DATABASE_URL: MISSING
-[INIT] GSI_ADMIN_PASSWORD: MISSING
-----------------------------
-> GSI SmartPay prêt sur le port 3000

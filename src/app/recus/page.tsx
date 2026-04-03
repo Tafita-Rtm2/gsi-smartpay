@@ -117,7 +117,7 @@ export default function RecusPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm only-print-this" id="recu-print">
             <div className="rounded-t-2xl px-6 py-5 text-white" style={{ background: etabInfo?.color || "#2563eb" }}>
               <div className="flex items-center justify-between mb-1">
-                <div className="font-bold text-lg">GSI SmartPay</div>
+                <img src="/gsi-smartpay/logo.png" alt="Logo" className="h-10 w-10 object-contain bg-white rounded-lg p-1" />
                 <div className="text-xs opacity-70">RECU OFFICIEL</div>
               </div>
               <div className="text-xs opacity-70">{etabInfo?.label || preview.campus}</div>

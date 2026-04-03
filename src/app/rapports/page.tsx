@@ -596,9 +596,12 @@ export default function RapportsPage() {
       <div id="print-report-area" className="only-print">
         <div style={{fontFamily:"Arial,sans-serif",padding:"20px",background:"white"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px",paddingBottom:"12px",borderBottom:`3px solid ${etabColor}`}}>
-            <div>
-              <div style={{fontSize:"20px",fontWeight:"bold",color:etabColor}}>GSI SmartPay</div>
-              <div style={{fontSize:"13px",color:"#64748b"}}>{etabInfo?.label}</div>
+            <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+              <img src="/gsi-smartpay/logo.png" alt="Logo" style={{height:"40px",width:"40px",objectFit:"contain",background:"white",borderRadius:"8px",padding:"4px",border:"1px solid #e2e8f0"}} />
+              <div>
+                <div style={{fontSize:"20px",fontWeight:"bold",color:etabColor}}>GSI SmartPay</div>
+                <div style={{fontSize:"13px",color:"#64748b"}}>{etabInfo?.label}</div>
+              </div>
             </div>
             <div style={{textAlign:"right",fontSize:"12px",color:"#64748b"}}>
               <div>Rapport financier</div>

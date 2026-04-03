@@ -150,33 +150,39 @@ export default function EtudiantsPage() {
   }, [ecolageMap]);
 
   const getEffectiveEcolage = useCallback((s: DBStudent): DBEcolage => {
-    const realEc = getEcolage(s);
-    if (realEc) {
-      const intelligentStatut = calculateIntelligentStatus(realEc.montantPaye, realEc.montantDu, realEc.montantMensuel);
-      return { ...realEc, statut: intelligentStatut };
-    }
-
     const campus = (s.campus || "").toLowerCase();
     const sFiliere = s.filiere || "";
     const sNiveau = s.niveau || "L1";
 
+    // On cherche d'abord la configuration globale (qui prime sur tout)
     const config = appState.programFees.find(p =>
-      p.campus === campus &&
+      p.campus.toLowerCase() === campus &&
       normalizeString(p.filiere) === normalizeString(sFiliere) &&
       p.niveau === sNiveau
     );
 
+    const realEc = getEcolage(s);
+
+    // Si on a un dossier réel mais pas de config, on garde le dossier tel quel
+    // Mais si on a une config, elle ÉCRASE le montant dû et mensuel du dossier réel
+    const finalDu = config?.amount ?? (realEc?.montantDu ?? 0);
+    const finalMensuel = config?.monthlyAmount ?? (realEc?.montantMensuel ?? 0);
+    const finalPaye = realEc?.montantPaye ?? 0;
+
+    const intelligentStatut = calculateIntelligentStatus(finalPaye, finalDu, finalMensuel);
+
     return {
+      id: realEc?.id || realEc?._id,
       etudiantId: getStudentId(s),
       etudiantNom: getStudentName(s),
       matricule: s.matricule || "",
       campus: s.campus || "",
       filiere: sFiliere,
       classe: sNiveau,
-      montantDu: config?.amount || 0,
-      montantPaye: 0,
-      statut: "impaye",
-      montantMensuel: config?.monthlyAmount || 0
+      montantDu: finalDu,
+      montantMensuel: finalMensuel,
+      montantPaye: finalPaye,
+      statut: intelligentStatut,
     };
   }, [appState.programFees, getEcolage]);
 
@@ -221,31 +227,28 @@ export default function EtudiantsPage() {
   };
 
   const openPayment = async (s: DBStudent) => {
+    const effEc = getEffectiveEcolage(s);
     let ec = getEcolage(s);
     if (!ec) {
-      const campus = (s.campus || "").toLowerCase();
-      const sFiliere = s.filiere || "";
-      const sNiveau = s.niveau || "L1";
-      const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(sFiliere));
-      const amount = config?.amount || 1500000;
       const { createEcolage } = await import("@/lib/api");
       const result = await createEcolage({
-        etudiantId: getStudentId(s),
-        etudiantNom: getStudentName(s),
-        matricule: s.matricule || "",
-        campus: s.campus || currentUser?.etablissement || "",
-        filiere: sFiliere,
-        classe: sNiveau,
-        montantDu: amount,
+        etudiantId: effEc.etudiantId,
+        etudiantNom: effEc.etudiantNom,
+        matricule: effEc.matricule || "",
+        campus: effEc.campus || currentUser?.etablissement || "",
+        filiere: effEc.filiere,
+        classe: effEc.classe,
+        montantDu: effEc.montantDu,
+        montantMensuel: effEc.montantMensuel,
         montantPaye: 0,
-        statut: "impaye",
-        annee: "2026",
+        statut: effEc.statut,
+        annee: String(new Date().getFullYear()),
       });
       if (result) ec = result;
       await load();
     }
     setPayStudent(s);
-    setPayEcolage(ec || null);
+    setPayEcolage(effEc);
     setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
   };
 
@@ -333,7 +336,12 @@ export default function EtudiantsPage() {
           const diff = montant - editingPaiement.montant;
           const newPaye = payEcolage.montantPaye + diff;
           const st = calculateIntelligentStatus(newPaye, payEcolage.montantDu, payEcolage.montantMensuel);
-          await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+          await updateEcolage(payEcolage.id || payEcolage._id || "", {
+            montantPaye: newPaye,
+            statut: st,
+            montantDu: payEcolage.montantDu,
+            montantMensuel: payEcolage.montantMensuel
+          });
         }
         showAlert("Succès", "Paiement modifié.", "success");
       } else {
@@ -363,7 +371,12 @@ export default function EtudiantsPage() {
       if (payEcolage && (payEcolage.id || payEcolage._id)) {
         const newPaye = payEcolage.montantPaye + montant;
         const st = calculateIntelligentStatus(newPaye, payEcolage.montantDu, payEcolage.montantMensuel);
-        await updateEcolage(payEcolage.id || payEcolage._id || "", { montantPaye: newPaye, statut: st });
+        await updateEcolage(payEcolage.id || payEcolage._id || "", {
+          montantPaye: newPaye,
+          statut: st,
+          montantDu: payEcolage.montantDu,
+          montantMensuel: payEcolage.montantMensuel
+        });
       }
       showAlert("Succès", "Paiement enregistré avec succès.", "success");
     }
@@ -422,7 +435,7 @@ export default function EtudiantsPage() {
             montantMensuel: config.monthlyAmount,
             montantPaye: 0,
             statut: "impaye",
-            annee: "2026",
+            annee: String(new Date().getFullYear()),
           });
         }
       }
@@ -1026,8 +1039,8 @@ export default function EtudiantsPage() {
           <div id="receipt-print-area" className="only-print" style={{background:"white",padding:"20px",boxSizing:"border-box"}}>
             <div style={{fontFamily:"Arial,sans-serif",maxWidth:"400px",margin:"0 auto",padding:"20px"}}>
               <div style={{background:etabColor,color:"white",padding:"20px",borderRadius:"12px 12px 0 0"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
-                  <div style={{fontWeight:"bold",fontSize:"18px"}}>GSI SmartPay</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}>
+                  <img src="/gsi-smartpay/logo.png" alt="Logo" style={{height:"40px",width:"40px",objectFit:"contain",background:"white",borderRadius:"8px",padding:"4px"}} />
                   <div style={{fontSize:"12px",opacity:0.8}}>RECU OFFICIEL</div>
                 </div>
                 <div style={{fontSize:"12px",opacity:0.7}}>{etabInfo?.label}</div>
@@ -1070,7 +1083,7 @@ export default function EtudiantsPage() {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
               <div className="px-6 py-5 text-white" style={{background:etabColor}}>
                 <div className="flex items-center justify-between mb-1">
-                  <div className="font-bold text-lg">GSI SmartPay</div>
+                  <img src="/gsi-smartpay/logo.png" alt="Logo" className="h-10 w-10 object-contain bg-white rounded-lg p-1" />
                   <div className="text-xs opacity-70">RECU OFFICIEL</div>
                 </div>
                 <div className="text-xs opacity-70">{etabInfo?.label}</div>
