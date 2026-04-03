@@ -88,10 +88,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-brand-600/20"
-            style={{ background: etabInfo.color }}>
-            <GraduationCap size={32} className="text-white" />
-          </div>
+          <img src="/gsi-smartpay/logo.png" alt="Logo" className="w-20 h-20 object-contain mx-auto mb-4 bg-white rounded-2xl p-2 shadow-xl" />
           <h1 className="text-3xl font-bold text-slate-900">GSI SmartPay</h1>
           <p className="text-slate-500 text-sm mt-1">Gestion des écolages universitaire</p>
         </div>

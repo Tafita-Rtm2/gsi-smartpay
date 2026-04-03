@@ -90,9 +90,7 @@ export default function Sidebar() {
     <>
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-100 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center">
-            <GraduationCap size={14} className="text-white" />
-          </div>
+          <img src="/gsi-smartpay/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
           <span className="font-bold text-slate-900 text-sm">GSI SmartPay</span>
         </div>
         <button onClick={() => setOpen(true)} className="p-2 rounded-xl text-slate-500 hover:bg-slate-100">
@@ -105,7 +103,10 @@ export default function Sidebar() {
       <aside className={clsx("lg:hidden fixed top-0 left-0 h-full w-72 z-50 bg-white shadow-2xl flex flex-col transition-transform duration-300",
         open ? "translate-x-0" : "-translate-x-full")}>
         <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <span className="font-bold text-slate-900">GSI SmartPay</span>
+          <div className="flex items-center gap-2">
+            <img src="/gsi-smartpay/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
+            <span className="font-bold text-slate-900">GSI SmartPay</span>
+          </div>
           <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100">
             <X size={18} className="text-slate-500" />
           </button>
@@ -117,9 +118,7 @@ export default function Sidebar() {
       <aside className="hidden lg:flex fixed top-0 left-0 h-full w-60 bg-white border-r border-slate-100 flex-col z-30">
         <div className="p-5 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center shadow-lg shadow-brand-600/30">
-              <GraduationCap size={20} className="text-white" />
-            </div>
+            <img src="/gsi-smartpay/logo.png" alt="Logo" className="w-10 h-10 object-contain bg-white rounded-xl p-1 shadow-sm border border-slate-100" />
             <div>
               <div className="font-bold text-slate-900 leading-tight">GSI SmartPay</div>
               <div className="text-xs text-slate-400">Gestion Ecolages</div>
