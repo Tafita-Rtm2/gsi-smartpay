@@ -329,6 +329,19 @@ export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | 
   return apiPost<DBFee>("fees", { ...data });
 }
 
+export async function saveFeesBulk(dataList: Omit<DBFee, "id" | "_id">[]): Promise<void> {
+  const all = await fetchFees();
+  for (const data of dataList) {
+    const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere && f.niveau === data.niveau);
+    if (existing) {
+      const id = existing.id || existing._id || "";
+      await apiPatch("fees", id, data);
+    } else {
+      await apiPost<DBFee>("fees", { ...data });
+    }
+  }
+}
+
 export async function deleteFee(id: string): Promise<boolean> {
   return apiDelete("fees", id);
 }
@@ -354,11 +367,11 @@ export function formatMGA(amount: number): string {
  * "impaye" si aucun paiement n'a été fait.
  */
 export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
-  if (du <= 0) return "paye";
-  if (paye >= du) return "paye";
+  if (du <= 0) return "impaye";
+  if (paye >= du && du > 0) return "paye";
   if (paye <= 0) return "impaye";
 
-  if (!mensuel || mensuel <= 0) return "en_attente";
+  if (!mensuel || mensuel <= 0) return "impaye";
 
   // Calcul basé sur le mois actuel (Année scolaire: Octobre à Septembre)
   const now = new Date();
@@ -375,5 +388,5 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
   const expectedToDate = monthsToPay * mensuel;
 
   if (paye >= expectedToDate) return "paye";
-  return "en_attente";
+  return "impaye";
 }
