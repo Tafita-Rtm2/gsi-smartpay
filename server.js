@@ -123,8 +123,8 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     console.log(`[SENSITIVE ACTION] Method: ${req.method}, Role: ${role}, Collection: ${collection}`);
     if (role !== "admin") {
       // EXCEPTION : On autorise le staff à mettre à jour l'état de l'écolage lors d'un paiement
-      // (montantPaye, statut, updatedAt)
-      const allowedFields = ["montantPaye", "statut", "updatedAt"];
+      // (montantPaye, statut, updatedAt, montantDu, montantMensuel)
+      const allowedFields = ["montantPaye", "statut", "updatedAt", "montantDu", "montantMensuel"];
       const requestedFields = Object.keys(req.body || {});
       const isTuitionUpdateOnly = collection === "ecolage" &&
                                   req.method === "PATCH" &&
@@ -137,7 +137,8 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     }
   } else if (req.method === "DELETE") {
     // Garder la sécurité générique sur les suppressions pour les autres collections
-    if (role !== "admin") return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
+    // EXCEPTION: On autorise la suppression des configurations de frais (fees) par le staff
+    if (role !== "admin" && collection !== "fees") return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
   }
 
   try {
