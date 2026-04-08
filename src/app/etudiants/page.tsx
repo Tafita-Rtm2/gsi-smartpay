@@ -410,16 +410,18 @@ export default function EtudiantsPage() {
     });
     await setProgramFeesBulk(dataList);
 
-    const { createEcolage, updateEcolage: apiUpdateEco } = await import("@/lib/api");
+    const { bulkUpdateEcolages, bulkCreateEcolages } = await import("@/lib/api");
     const myEtab = (currentUser.etablissement || "").toLowerCase();
 
     const campusStudents = students.filter(s => (s.campus || "").toLowerCase().includes(myEtab) || (s.campus || "").toLowerCase().includes(myEtab.slice(0,4)));
+
+    const updates = [];
+    const creates = [];
 
     for (const s of campusStudents) {
       const sFiliere = s.filiere || "";
       const sNiveau = s.niveau || "L1";
 
-      // Use dataList instead of appState to avoid stale data issues
       const config = dataList.find(p =>
         normalizeString(p.filiere) === normalizeString(sFiliere) &&
         p.niveau === sNiveau
@@ -429,14 +431,13 @@ export default function EtudiantsPage() {
         const ec = getEcolage(s);
         if (ec) {
           const st = calculateIntelligentStatus(ec.montantPaye, config.amount, config.monthlyAmount);
-          await apiUpdateEco(ec.id || ec._id || "", {
-            montantDu: config.amount,
-            montantMensuel: config.monthlyAmount,
-            statut: st
+          updates.push({
+            id: ec.id || ec._id || "",
+            data: { montantDu: config.amount, montantMensuel: config.monthlyAmount, statut: st }
           });
         } else {
           const st = calculateIntelligentStatus(0, config.amount, config.monthlyAmount);
-          await createEcolage({
+          creates.push({
             etudiantId: getStudentId(s),
             etudiantNom: getStudentName(s),
             matricule: s.matricule || "",
@@ -452,6 +453,9 @@ export default function EtudiantsPage() {
         }
       }
     }
+
+    if (updates.length > 0) await bulkUpdateEcolages(updates);
+    if (creates.length > 0) await bulkCreateEcolages(creates);
     await load();
     setSaving(false);
     setShowConfig(false);
@@ -625,6 +629,12 @@ export default function EtudiantsPage() {
               if (f.campus === currentUser?.etablissement) {
                 initial[`${f.filiere}:::${f.niveau}`] = { amount: f.amount, monthlyAmount: f.monthlyAmount };
               }
+            });
+            // Ensure L1-M2 are present for the active filière even if not in DB
+            const fil = activeConfigFiliere || filieres[0];
+            ["L1", "L2", "L3", "M1", "M2"].forEach(lvl => {
+              const k = `${fil}:::${lvl}`;
+              if (!initial[k]) initial[k] = { amount: 0, monthlyAmount: 0 };
             });
             setLocalFees(initial);
             setShowConfig(true);
@@ -1392,7 +1402,7 @@ export default function EtudiantsPage() {
 
                     return (
                       <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all relative overflow-hidden">
-                        {hasGlobalConfig && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
+                        {(hasGlobalConfig || (fee && fee.amount > 0)) && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
                         <div className="flex items-center justify-between mb-3">
                           <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Niveau {niv}</div>
                           {hasGlobalConfig && (
