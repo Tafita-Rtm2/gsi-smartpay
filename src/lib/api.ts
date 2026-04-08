@@ -329,6 +329,10 @@ export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | 
   return apiPost<DBFee>("fees", { ...data });
 }
 
+export async function deleteFee(id: string): Promise<boolean> {
+  return apiDelete("fees", id);
+}
+
 // -- HELPERS --
 export function getStudentId(s: DBStudent): string { return s.id || s._id || ""; }
 export function getStudentName(s: DBStudent): string {
@@ -350,7 +354,8 @@ export function formatMGA(amount: number): string {
  * "impaye" si aucun paiement n'a été fait.
  */
 export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
-  if (paye >= du && du > 0) return "paye";
+  if (du <= 0) return "paye";
+  if (paye >= du) return "paye";
   if (paye <= 0) return "impaye";
 
   if (!mensuel || mensuel <= 0) return "en_attente";

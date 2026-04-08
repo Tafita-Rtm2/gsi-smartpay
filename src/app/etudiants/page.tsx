@@ -44,7 +44,7 @@ function normalizeString(str: any) {
 }
 
 export default function EtudiantsPage() {
-  const { currentUser, appState, setProgramFee } = useAuth();
+  const { currentUser, appState, setProgramFee, deleteProgramFee } = useAuth();
 
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
@@ -165,8 +165,8 @@ export default function EtudiantsPage() {
 
     // Si on a un dossier réel mais pas de config, on garde le dossier tel quel
     // Mais si on a une config, elle ÉCRASE le montant dû et mensuel du dossier réel
-    const finalDu = config?.amount ?? (realEc?.montantDu ?? 0);
-    const finalMensuel = config?.monthlyAmount ?? (realEc?.montantMensuel ?? 0);
+    const finalDu = config ? config.amount : (realEc?.montantDu ?? 0);
+    const finalMensuel = config ? (config.monthlyAmount ?? 0) : (realEc?.montantMensuel ?? 0);
     const finalPaye = realEc?.montantPaye ?? 0;
 
     const intelligentStatut = calculateIntelligentStatus(finalPaye, finalDu, finalMensuel);
@@ -339,8 +339,6 @@ export default function EtudiantsPage() {
           await updateEcolage(payEcolage.id || payEcolage._id || "", {
             montantPaye: newPaye,
             statut: st,
-            montantDu: payEcolage.montantDu,
-            montantMensuel: payEcolage.montantMensuel
           });
         }
         showAlert("Succès", "Paiement modifié.", "success");
@@ -374,8 +372,6 @@ export default function EtudiantsPage() {
         await updateEcolage(payEcolage.id || payEcolage._id || "", {
           montantPaye: newPaye,
           statut: st,
-          montantDu: payEcolage.montantDu,
-          montantMensuel: payEcolage.montantMensuel
         });
       }
       showAlert("Succès", "Paiement enregistré avec succès.", "success");
@@ -386,7 +382,7 @@ export default function EtudiantsPage() {
 
 
   const handleBulkApplyConfig = () => {
-    if ((!bulkAmount || Number(bulkAmount) <= 0) && (!bulkMonthly || Number(bulkMonthly) <= 0)) return;
+    if (bulkAmount === "" && bulkMonthly === "") return;
     const fil = activeConfigFiliere || filieres[0];
     selectedConfigLevels.forEach(lvl => {
       const existing = appState.programFees.find(f => f.campus === currentUser!.etablissement && f.filiere === fil && f.niveau === lvl);
@@ -414,7 +410,7 @@ export default function EtudiantsPage() {
         normalizeString(p.filiere) === normalizeString(sFiliere) &&
         p.niveau === sNiveau
       );
-      if (config && config.amount > 0) {
+      if (config) {
         const ec = getEcolage(s);
         if (ec) {
           const st = calculateIntelligentStatus(ec.montantPaye, config.amount, config.monthlyAmount);
@@ -723,7 +719,7 @@ export default function EtudiantsPage() {
                           {s.niveau && <span className="bg-brand-50 text-brand-700 text-xs font-bold px-2 py-0.5 rounded-full">{s.niveau}</span>}
                         </td>
                         <td className="px-4 py-3 min-w-[150px]">
-                          {ec.montantDu > 0 ? (
+                          {realEc || (config && config.amount >= 0) ? (
                             <div className="text-xs space-y-0.5">
                               <div className="font-black text-slate-900">{formatMGA(ec.montantDu)}</div>
                               <div className="text-emerald-600 font-medium">Payé: {formatMGA(ec.montantPaye)}</div>
@@ -803,7 +799,7 @@ export default function EtudiantsPage() {
                       </span>
                     </div>
                     {s.filiere && <div className="text-xs text-slate-500 truncate">{s.filiere}</div>}
-                    {ec.montantDu > 0 && (
+                    {(realEc || (config && config.amount >= 0)) && (
                       <div className="flex flex-wrap gap-3 text-xs">
                         <span className="text-slate-500">Total: <span className="font-bold text-slate-700">{formatMGA(ec.montantDu)}</span></span>
                         <span className="text-emerald-600 font-bold">{formatMGA(ec.montantPaye)} paye</span>
@@ -1358,8 +1354,16 @@ export default function EtudiantsPage() {
                     const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === currentFiliere && p.niveau === niv);
                     return (
                       <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all relative overflow-hidden">
-                        {config && config.amount > 0 && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
-                        <div className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest">Niveau {niv}</div>
+                        {config && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Niveau {niv}</div>
+                          {config && (
+                            <button onClick={() => deleteProgramFee(currentUser!.etablissement, currentFiliere, niv)}
+                              className="text-red-400 hover:text-red-600 transition-colors">
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                         <div className="space-y-4">
                           <div className="relative">
                             <label className="text-[9px] font-black text-slate-400 block mb-1">TOTAL ANNUEL (Dû)</label>

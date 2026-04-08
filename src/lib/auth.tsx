@@ -4,7 +4,7 @@ import { User, Etablissement, generateId } from "@/lib/data";
 import {
   fetchStaff, createStaff, updateStaff, deleteStaff,
   fetchExpenses, createExpense, updateExpense, deleteExpense,
-  fetchFees, saveFee, DBExpense, DBFee, DBStudent
+  fetchFees, saveFee, deleteFee, DBExpense, DBFee, DBStudent
 } from "@/lib/api";
 
 interface ProgramFee {
@@ -45,6 +45,7 @@ interface AuthContextType {
   myExpenses: DBExpense[];
   // Program Fees management
   setProgramFee: (campus: Etablissement, filiere: string, amount: number, niveau: string, monthlyAmount?: number) => Promise<void>;
+  deleteProgramFee: (campus: Etablissement, filiere: string, niveau: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -159,6 +160,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res) await refreshState();
   };
 
+  const deleteProgramFeeInDb = async (campus: Etablissement, filiere: string, niveau: string) => {
+    const all = await fetchFees();
+    const existing = all.find(f => f.campus === campus && f.filiere === filiere && f.niveau === niveau);
+    if (existing) {
+      const id = existing.id || existing._id || "";
+      await deleteFee(id);
+      await refreshState();
+    }
+  };
+
   const isAdmin = currentUser?.role === "admin";
   const myExpenses = isAdmin
     ? appState.expenses
@@ -169,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       currentUser, isAdmin, appState, login, logout, refreshState,
       createUser, updateUser: updateUserProfile, deleteUser: deleteUserProfile,
       addExpense: addExpenseToDb, updateExpense: updateExpenseInDb, deleteExpense: deleteExpenseInDb, myExpenses,
-      setProgramFee: setProgramFeeInDb,
+      setProgramFee: setProgramFeeInDb, deleteProgramFee: deleteProgramFeeInDb,
     }}>
       {children}
     </AuthContext.Provider>
