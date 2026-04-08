@@ -700,6 +700,11 @@ export default function EtudiantsPage() {
                   {filtered.map(({ student: s, effectiveEcolage: ec }) => {
                     const realEc = getEcolage(s);
                     const statut = ec.statut;
+                    const config = appState.programFees.find(p =>
+                      p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
+                      normalizeString(p.filiere) === normalizeString(s.filiere || "") &&
+                      p.niveau === (s.niveau || "L1")
+                    );
                     return (
                       <tr key={getStudentId(s)} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-4 py-3">
@@ -784,6 +789,11 @@ export default function EtudiantsPage() {
               {filtered.map(({ student: s, effectiveEcolage: ec }) => {
                 const realEc = getEcolage(s);
                 const statut = ec.statut;
+                const config = appState.programFees.find(p =>
+                  p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
+                  normalizeString(p.filiere) === normalizeString(s.filiere || "") &&
+                  p.niveau === (s.niveau || "L1")
+                );
                 return (
                   <div key={getStudentId(s)} className="p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
