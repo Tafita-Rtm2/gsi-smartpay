@@ -229,6 +229,37 @@ export async function deleteEcolage(id: string): Promise<boolean> {
   return apiDelete("ecolage", id);
 }
 
+export async function bulkUpdateEcolages(ops: { id: string, data: Partial<DBEcolage> }[]): Promise<void> {
+  const body = {
+    ops: ops.map(op => ({
+      method: "PATCH",
+      collection: "ecolage",
+      id: op.id,
+      data: { ...op.data, updatedAt: new Date().toISOString() }
+    }))
+  };
+  await fetch(`${API_BASE}bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+export async function bulkCreateEcolages(dataList: Omit<DBEcolage, "id" | "_id">[]): Promise<void> {
+  const body = {
+    ops: dataList.map(data => ({
+      method: "POST",
+      collection: "ecolage",
+      data: { ...data, createdAt: new Date().toISOString() }
+    }))
+  };
+  await fetch(`${API_BASE}bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
 export async function fetchPaiements(): Promise<DBPaiement[]> {
   return apiGet<DBPaiement>("paiements");
 }
@@ -371,22 +402,25 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
   if (paye >= du && du > 0) return "paye";
   if (paye <= 0) return "impaye";
 
-  if (!mensuel || mensuel <= 0) return "impaye";
+  if (!mensuel || mensuel <= 0) {
+    return "en_attente";
+  }
 
-  // Calcul basé sur le mois actuel (Année scolaire: Octobre à Septembre)
+  // Calcul basé sur l'exemple utilisateur : Mars (Mois 1), Avril (Mois 2)...
+  // Si on est en Mars, on doit avoir payé 1 * mensuel.
+  // Si on est en Avril, on doit avoir payé 2 * mensuel.
   const now = new Date();
-  const month = now.getMonth(); // 0 = Janvier, 9 = Octobre
+  const month = now.getMonth(); // 0=Jan, 1=Fev, 2=Mar...
 
-  // Index du mois dans l'année scolaire (Octobre = 0, ..., Septembre = 11)
-  // Formule: (month + 3) % 12
-  // Jan(0)+3 = 3, Fev(1)+3 = 4, ..., Sept(8)+3 = 11, Oct(9)+3 = 12%12 = 0
-  const schoolMonthIndex = (month + 3) % 12;
+  // Index relatif à Mars (Mars = 0)
+  // Formule: (month - 2 + 12) % 12
+  const relMonth = (month - 2 + 12) % 12;
 
-  // Montant attendu à ce jour (mois en cours inclus)
-  // On limite à 10 mois maximum (année universitaire standard)
-  const monthsToPay = Math.min(schoolMonthIndex + 1, 10);
-  const expectedToDate = monthsToPay * mensuel;
+  // On ne compte que les mois "écoulés" depuis Mars inclus
+  // Si on est en Jan/Fev, on considère qu'on est en fin d'année (Mois 11, 12) ou début?
+  // Restons simple : expected = (relMonth + 1) * mensuel
+  const expectedToDate = (relMonth + 1) * mensuel;
 
   if (paye >= expectedToDate) return "paye";
-  return "impaye";
+  return "en_attente";
 }
