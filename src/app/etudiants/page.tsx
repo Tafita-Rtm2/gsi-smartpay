@@ -44,7 +44,7 @@ function normalizeString(str: any) {
 }
 
 export default function EtudiantsPage() {
-  const { currentUser, appState, setProgramFee, deleteProgramFee } = useAuth();
+  const { currentUser, appState, setProgramFee, setProgramFeesBulk, deleteProgramFee } = useAuth();
 
   const [students,  setStudents]  = useState<DBStudent[]>([]);
   const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
@@ -66,12 +66,14 @@ export default function EtudiantsPage() {
   const [payStudent,      setPayStudent]      = useState<DBStudent | null>(null);
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
+  const [localEcolageForm, setLocalEcolageForm] = useState({ montantDu: "" });
 
   const [showConfig,      setShowConfig]      = useState(false);
   const [bulkAmount,      setBulkAmount]      = useState("");
   const [bulkMonthly,     setBulkMonthly]     = useState("");
-  const [selectedConfigLevels, setSelectedConfigLevels] = useState<string[]>(["L1", "L2", "L3", "M1", "M2"]);
+  const [selectedConfigLevels, setSelectedConfigLevels] = useState<string[]>([]);
   const [activeConfigFiliere, setActiveConfigFiliere] = useState("");
+  const [localFees, setLocalFees] = useState<Record<string, { amount: number, monthlyAmount?: number }>>({});
 
   const [editEcolage,     setEditEcolage]     = useState<DBEcolage | null>(null);
   const [deleteEcolageObj, setDeleteEcolageObj] = useState<DBEcolage | null>(null);
@@ -254,7 +256,7 @@ export default function EtudiantsPage() {
 
   const openEditEcolage = (ec: DBEcolage) => {
     setEditEcolage(ec);
-    setEcolageForm({ montantDu: String(ec.montantDu) });
+    setLocalEcolageForm({ montantDu: String(ec.montantDu) });
   };
 
   const handleSaveEcolage = async () => {
@@ -264,7 +266,7 @@ export default function EtudiantsPage() {
     }
     setSaving(true);
     const id = editEcolage.id || editEcolage._id || "";
-    const newDu = Number(ecolageForm.montantDu);
+    const newDu = Number(localEcolageForm.montantDu);
 
     if (isAdmin) {
       const st = calculateIntelligentStatus(editEcolage.montantPaye, newDu, editEcolage.montantMensuel);
@@ -384,12 +386,15 @@ export default function EtudiantsPage() {
   const handleBulkApplyConfig = () => {
     if (bulkAmount === "" && bulkMonthly === "") return;
     const fil = activeConfigFiliere || filieres[0];
+    const updated = { ...localFees };
     selectedConfigLevels.forEach(lvl => {
-      const existing = appState.programFees.find(f => f.campus === currentUser!.etablissement && f.filiere === fil && f.niveau === lvl);
+      const key = `${fil}:::${lvl}`;
+      const existing = updated[key];
       const newDu = bulkAmount ? Number(bulkAmount) : (existing?.amount || 0);
       const newMensuel = bulkMonthly ? Number(bulkMonthly) : (existing?.monthlyAmount || 0);
-      setProgramFee(currentUser!.etablissement, fil, newDu, lvl, newMensuel);
+      updated[key] = { amount: newDu, monthlyAmount: newMensuel };
     });
+    setLocalFees(updated);
     setBulkAmount("");
     setBulkMonthly("");
   };
@@ -397,19 +402,29 @@ export default function EtudiantsPage() {
   const handleApplyConfigToAll = async () => {
     if (!currentUser) return;
     setSaving(true);
-    const { createEcolage, updateEcolage: apiUpdateEco } = await import("@/lib/api");
-    const myEtab = currentUser.etablissement;
 
-    const campusStudents = students.filter(s => (s.campus || "").toLowerCase().includes(myEtab));
+    // Save local fees to DB first in bulk
+    const dataList = Object.entries(localFees).map(([key, val]) => {
+      const [fil, lvl] = key.split(":::");
+      return { campus: currentUser.etablissement, filiere: fil, niveau: lvl, amount: val.amount, monthlyAmount: val.monthlyAmount };
+    });
+    await setProgramFeesBulk(dataList);
+
+    const { createEcolage, updateEcolage: apiUpdateEco } = await import("@/lib/api");
+    const myEtab = (currentUser.etablissement || "").toLowerCase();
+
+    const campusStudents = students.filter(s => (s.campus || "").toLowerCase().includes(myEtab) || (s.campus || "").toLowerCase().includes(myEtab.slice(0,4)));
 
     for (const s of campusStudents) {
       const sFiliere = s.filiere || "";
       const sNiveau = s.niveau || "L1";
-      const config = appState.programFees.find(p =>
-        p.campus === myEtab &&
+
+      // Use dataList instead of appState to avoid stale data issues
+      const config = dataList.find(p =>
         normalizeString(p.filiere) === normalizeString(sFiliere) &&
         p.niveau === sNiveau
       );
+
       if (config) {
         const ec = getEcolage(s);
         if (ec) {
@@ -420,17 +435,18 @@ export default function EtudiantsPage() {
             statut: st
           });
         } else {
+          const st = calculateIntelligentStatus(0, config.amount, config.monthlyAmount);
           await createEcolage({
             etudiantId: getStudentId(s),
             etudiantNom: getStudentName(s),
             matricule: s.matricule || "",
-            campus: s.campus || myEtab,
+            campus: s.campus || currentUser.etablissement,
             filiere: sFiliere,
             classe: sNiveau,
             montantDu: config.amount,
             montantMensuel: config.monthlyAmount,
             montantPaye: 0,
-            statut: "impaye",
+            statut: st,
             annee: String(new Date().getFullYear()),
           });
         }
@@ -603,7 +619,16 @@ export default function EtudiantsPage() {
           >
             <Printer size={15} /> Imprimer liste
           </button>
-          <button onClick={() => setShowConfig(true)}
+          <button onClick={() => {
+            const initial: any = {};
+            appState.programFees.forEach(f => {
+              if (f.campus === currentUser?.etablissement) {
+                initial[`${f.filiere}:::${f.niveau}`] = { amount: f.amount, monthlyAmount: f.monthlyAmount };
+              }
+            });
+            setLocalFees(initial);
+            setShowConfig(true);
+          }}
             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
             <Settings size={15} /> Configuration
           </button>
@@ -1361,14 +1386,22 @@ export default function EtudiantsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto flex-1 pr-2 pb-4">
                   {["L1", "L2", "L3", "M1", "M2"].map(niv => {
-                    const config = appState.programFees.find(p => p.campus === currentUser?.etablissement && p.filiere === currentFiliere && p.niveau === niv);
+                    const feeKey = `${currentFiliere}:::${niv}`;
+                    const fee = localFees[feeKey];
+                    const hasGlobalConfig = appState.programFees.some(p => p.campus === currentUser?.etablissement && p.filiere === currentFiliere && p.niveau === niv);
+
                     return (
                       <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all relative overflow-hidden">
-                        {config && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
+                        {hasGlobalConfig && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
                         <div className="flex items-center justify-between mb-3">
                           <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Niveau {niv}</div>
-                          {config && (
-                            <button onClick={() => deleteProgramFee(currentUser!.etablissement, currentFiliere, niv)}
+                          {hasGlobalConfig && (
+                            <button onClick={async () => {
+                              await deleteProgramFee(currentUser!.etablissement, currentFiliere, niv);
+                              const updated = { ...localFees };
+                              delete updated[feeKey];
+                              setLocalFees(updated);
+                            }}
                               className="text-red-400 hover:text-red-600 transition-colors">
                               <Trash2 size={12} />
                             </button>
@@ -1378,16 +1411,16 @@ export default function EtudiantsPage() {
                           <div className="relative">
                             <label className="text-[9px] font-black text-slate-400 block mb-1">TOTAL ANNUEL (Dû)</label>
                             <input type="number" placeholder="0"
-                              value={config?.amount || ""}
-                              onChange={e => setProgramFee(currentUser!.etablissement, currentFiliere, Number(e.target.value), niv, config?.monthlyAmount)}
+                              value={fee?.amount ?? ""}
+                              onChange={e => setLocalFees(prev => ({ ...prev, [feeKey]: { ...prev[feeKey], amount: Number(e.target.value) } }))}
                               className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold focus:outline-none focus:bg-white focus:border-brand-200 transition-all" />
                             <span className="absolute right-2 top-[24px] text-[8px] font-bold text-slate-400">Ar</span>
                           </div>
                           <div className="relative">
                             <label className="text-[9px] font-black text-slate-400 block mb-1">MENSUEL PAR DÉFAUT</label>
                             <input type="number" placeholder="0"
-                              value={config?.monthlyAmount || ""}
-                              onChange={e => setProgramFee(currentUser!.etablissement, currentFiliere, config?.amount || 0, niv, Number(e.target.value))}
+                              value={fee?.monthlyAmount ?? ""}
+                              onChange={e => setLocalFees(prev => ({ ...prev, [feeKey]: { ...prev[feeKey], monthlyAmount: Number(e.target.value) } }))}
                               className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold focus:outline-none focus:bg-white focus:border-brand-200 transition-all" />
                             <span className="absolute right-2 top-[24px] text-[8px] font-bold text-slate-400">Ar</span>
                           </div>
@@ -1427,7 +1460,7 @@ export default function EtudiantsPage() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">Montant total dû (Ar)</label>
-                <input type="number" value={ecolageForm.montantDu} onChange={e=>setEcolageForm({montantDu:e.target.value})}
+                <input type="number" value={localEcolageForm.montantDu} onChange={e=>setLocalEcolageForm({montantDu:e.target.value})}
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
               </div>
 
@@ -1447,7 +1480,7 @@ export default function EtudiantsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span>Nouveau reste :</span>
-                  <span className="font-bold text-slate-900">{formatMGA(Math.max(0, Number(ecolageForm.montantDu) - editEcolage.montantPaye))}</span>
+                  <span className="font-bold text-slate-900">{formatMGA(Math.max(0, Number(localEcolageForm.montantDu) - editEcolage.montantPaye))}</span>
                 </div>
               </div>
             </div>
