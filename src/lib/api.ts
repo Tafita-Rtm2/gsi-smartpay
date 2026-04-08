@@ -414,13 +414,13 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
 
   // Index relatif à Mars (Mars = 0)
   // Formule: (month - 2 + 12) % 12
+  // Note: On utilise +1 pour inclure le mois en cours
   const relMonth = (month - 2 + 12) % 12;
 
-  // On ne compte que les mois "écoulés" depuis Mars inclus
-  // Si on est en Jan/Fev, on considère qu'on est en fin d'année (Mois 11, 12) ou début?
-  // Restons simple : expected = (relMonth + 1) * mensuel
+  // Montant attendu à ce jour (cumulative)
   const expectedToDate = (relMonth + 1) * mensuel;
 
   if (paye >= expectedToDate) return "paye";
-  return "en_attente";
+
+  return "impaye";
 }

@@ -66,7 +66,7 @@ export default function EtudiantsPage() {
   const [payStudent,      setPayStudent]      = useState<DBStudent | null>(null);
   const [payEcolage,      setPayEcolage]      = useState<DBEcolage | null>(null);
   const [editingPaiement, setEditingPaiement] = useState<DBPaiement | null>(null);
-  const [localEcolageForm, setLocalEcolageForm] = useState({ montantDu: "" });
+  const [localEcolageForm, setLocalEcolageForm] = useState({ montantDu: "", montantMensuel: "" });
 
   const [showConfig,      setShowConfig]      = useState(false);
   const [bulkAmount,      setBulkAmount]      = useState("");
@@ -205,6 +205,7 @@ export default function EtudiantsPage() {
       totalDu += ec.montantDu;
       totalPaye += ec.montantPaye;
     });
+    // For display logic in tabs, we count "en_attente" as "impaye" visually if requested
     return { paye, impaye, en_attente, totalDu, totalPaye };
   }, [studentData]);
 
@@ -217,7 +218,11 @@ export default function EtudiantsPage() {
       const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
       const ok2 = filiereFilter === "Toutes" || normalizeString(s.filiere||"") === normFiliereFilter;
       const ok2b = selectedNiveaux.length === 0 || selectedNiveaux.includes(s.niveau || "L1");
-      const ok3 = statutTab === "tous" || ec.statut === statutTab;
+
+      let ok3 = statutTab === "tous" || ec.statut === statutTab;
+      // Visually, if we are in "impaye" tab, we also show "en_attente" students
+      if (statutTab === "impaye" && ec.statut === "en_attente") ok3 = true;
+
       return ok1 && ok2 && ok2b && ok3;
     });
   }, [studentData, search, filiereFilter, selectedNiveaux, statutTab]);
@@ -256,7 +261,7 @@ export default function EtudiantsPage() {
 
   const openEditEcolage = (ec: DBEcolage) => {
     setEditEcolage(ec);
-    setLocalEcolageForm({ montantDu: String(ec.montantDu) });
+    setLocalEcolageForm({ montantDu: String(ec.montantDu), montantMensuel: String(ec.montantMensuel || 0) });
   };
 
   const handleSaveEcolage = async () => {
@@ -267,10 +272,11 @@ export default function EtudiantsPage() {
     setSaving(true);
     const id = editEcolage.id || editEcolage._id || "";
     const newDu = Number(localEcolageForm.montantDu);
+    const newMensuel = Number(localEcolageForm.montantMensuel);
 
     if (isAdmin) {
-      const st = calculateIntelligentStatus(editEcolage.montantPaye, newDu, editEcolage.montantMensuel);
-      await updateEcolage(id, { montantDu: newDu, statut: st });
+      const st = calculateIntelligentStatus(editEcolage.montantPaye, newDu, newMensuel);
+      await updateEcolage(id, { montantDu: newDu, montantMensuel: newMensuel, statut: st });
       showAlert("Succès", "Écolage mis à jour.", "success");
     } else {
       const { createRequest } = await import("@/lib/api");
@@ -341,6 +347,7 @@ export default function EtudiantsPage() {
           await updateEcolage(payEcolage.id || payEcolage._id || "", {
             montantPaye: newPaye,
             statut: st,
+            montantMensuel: payEcolage.montantMensuel // Keep it in sync
           });
         }
         showAlert("Succès", "Paiement modifié.", "success");
@@ -374,6 +381,7 @@ export default function EtudiantsPage() {
         await updateEcolage(payEcolage.id || payEcolage._id || "", {
           montantPaye: newPaye,
           statut: st,
+          montantMensuel: payEcolage.montantMensuel // Keep it in sync
         });
       }
       showAlert("Succès", "Paiement enregistré avec succès.", "success");
@@ -553,6 +561,10 @@ export default function EtudiantsPage() {
     setApprovalDesc("");
   };
 
+  const getExpectedStatus = (ec: DBEcolage) => {
+    return calculateIntelligentStatus(ec.montantPaye, ec.montantDu, ec.montantMensuel);
+  };
+
   const Avatar = ({ s, size = 36 }: { s: DBStudent; size?: number }) => {
     const name = getStudentName(s);
     const initials = name.split(" ").map(n=>n[0]||"").join("").slice(0,2).toUpperCase();
@@ -567,7 +579,7 @@ export default function EtudiantsPage() {
   const STAT_TABS: { id: FilterTab; label: string; count: number; color: string; border: string; icon: React.ElementType }[] = [
     { id: "tous",       label: "Tous",       count: students.length, color: "text-slate-700",   border: "border-slate-400",   icon: Users        },
     { id: "paye",       label: "Payes",      count: stats.paye,       color: "text-emerald-600", border: "border-emerald-400", icon: CheckCircle2 },
-    { id: "impaye",     label: "Impayes",    count: stats.impaye,     color: "text-red-600",     border: "border-red-400",     icon: AlertTriangle},
+    { id: "impaye",     label: "Impayes",    count: stats.impaye + stats.en_attente, color: "text-red-600", border: "border-red-400", icon: AlertTriangle},
     { id: "en_attente", label: "En attente", count: stats.en_attente,    color: "text-amber-600",   border: "border-amber-400",   icon: Clock        },
   ];
 
@@ -761,8 +773,9 @@ export default function EtudiantsPage() {
                         <td className="px-4 py-3 min-w-[150px]">
                           {realEc || (config && config.amount >= 0) ? (
                             <div className="text-xs space-y-0.5">
-                              <div className="font-black text-slate-900">{formatMGA(ec.montantDu)}</div>
+                              <div className="font-black text-slate-900">{formatMGA(ec.montantDu)} <span className="text-[9px] text-slate-400 font-medium">/ an</span></div>
                               <div className="text-emerald-600 font-medium">Payé: {formatMGA(ec.montantPaye)}</div>
+                              {ec.montantMensuel && ec.montantMensuel > 0 && <div className="text-brand-600 font-bold text-[10px]">Mensuel: {formatMGA(ec.montantMensuel)}</div>}
                               {ec.montantDu > ec.montantPaye && <div className="text-red-500 font-black">Reste: {formatMGA(ec.montantDu-ec.montantPaye)}</div>}
                             </div>
                           ) : (
@@ -847,7 +860,8 @@ export default function EtudiantsPage() {
                     {(realEc || (config && config.amount >= 0)) && (
                       <div className="flex flex-wrap gap-3 text-xs">
                         <span className="text-slate-500">Total: <span className="font-bold text-slate-700">{formatMGA(ec.montantDu)}</span></span>
-                        <span className="text-emerald-600 font-bold">{formatMGA(ec.montantPaye)} paye</span>
+                        <span className="text-emerald-600 font-bold">{formatMGA(ec.montantPaye)} payé</span>
+                        {ec.montantMensuel && ec.montantMensuel > 0 && <span className="text-brand-600 font-bold">Mensuel: {formatMGA(ec.montantMensuel)}</span>}
                         {ec.montantDu > ec.montantPaye && <span className="text-red-500 font-bold">Reste: {formatMGA(ec.montantDu-ec.montantPaye)}</span>}
                       </div>
                     )}
@@ -949,7 +963,7 @@ export default function EtudiantsPage() {
 
                     <div className="rounded-2xl border border-slate-100 overflow-hidden">
                       <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Scolarité Annuelle</span>
+                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Scolarité & Plafonds</span>
                         <div className="flex gap-2">
                           {getEcolage(profileStudent) && (
                             <button onClick={() => { openEditEcolage(getEcolage(profileStudent)!); setProfileStudent(null); }}
@@ -963,13 +977,14 @@ export default function EtudiantsPage() {
                       </div>
                       {ec.montantDu > 0 ? (
                         <div className="p-4 space-y-4">
-                          <div className="grid grid-cols-3 gap-3 text-center">
+                          <div className="grid grid-cols-4 gap-2 text-center">
                             {[
-                              { label: "Total dû", value: formatMGA(ec.montantDu), color: "text-slate-900" },
+                              { label: "Annuel", value: formatMGA(ec.montantDu), color: "text-slate-900" },
+                              { label: "Mensuel", value: formatMGA(ec.montantMensuel || 0), color: "text-brand-600" },
                               { label: "Payé", value: formatMGA(ec.montantPaye), color: "text-emerald-600" },
                               { label: "Reste", value: formatMGA(ec.montantDu-ec.montantPaye), color: ec.montantDu>ec.montantPaye?"text-red-600":"text-emerald-600" },
                             ].map(({ label, value, color }) => (
-                              <div key={label}><div className={`text-xs font-black ${color}`}>{value}</div><div className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-tighter">{label}</div></div>
+                              <div key={label}><div className={`text-[10px] font-black ${color} truncate`}>{value}</div><div className="text-[8px] font-black uppercase text-slate-400 mt-0.5 tracking-tighter">{label}</div></div>
                             ))}
                           </div>
                           {(() => {
@@ -1468,10 +1483,17 @@ export default function EtudiantsPage() {
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">Étudiant</label>
                 <div className="text-sm font-bold text-slate-900">{editEcolage.etudiantNom}</div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">Montant total dû (Ar)</label>
-                <input type="number" value={localEcolageForm.montantDu} onChange={e=>setLocalEcolageForm({montantDu:e.target.value})}
-                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Total Annuel (Ar)</label>
+                  <input type="number" value={localEcolageForm.montantDu} onChange={e=>setLocalEcolageForm(f=>({...f, montantDu:e.target.value}))}
+                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">Mensuel (Ar)</label>
+                  <input type="number" value={localEcolageForm.montantMensuel} onChange={e=>setLocalEcolageForm(f=>({...f, montantMensuel:e.target.value}))}
+                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                </div>
               </div>
 
               {!isAdmin && (
