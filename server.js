@@ -141,6 +141,30 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     if (role !== "admin" && collection !== "fees") return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
   }
 
+  // SUPPORT POUR LES MISES À JOUR GROUPÉES (BULK)
+  if (req.method === "POST" && pathSuffix === "/bulk") {
+    const { ops } = req.body; // ops: [{ method: "PATCH", collection: "ecolage", id: "...", data: {...} }]
+    if (!Array.isArray(ops)) return res.status(400).json({ error: "ops array required" });
+
+    const results = [];
+    for (const op of ops) {
+      try {
+        const opUrl = `${API_BASE}/${op.collection}/${op.id || ""}`.replace(/\/+$/, '');
+        const opConfig = {
+          method: op.method, url: opUrl, data: op.data,
+          headers: { "Accept": "application/json", "Content-Type": "application/json" },
+          timeout: 5000, httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+          validateStatus: () => true
+        };
+        const opRes = await axios(opConfig);
+        results.push({ status: opRes.status, data: opRes.data });
+      } catch (err) {
+        results.push({ status: 500, error: err.message });
+      }
+    }
+    return res.json({ results });
+  }
+
   try {
     const config = {
       method: req.method, url: finalUrl, params: req.query,
