@@ -148,7 +148,7 @@ export default function LoginPage() {
           </form>
         </div>
         <p className="text-center text-slate-400 text-xs mt-8 font-medium">
-          © 2026 Groupe GSI SmartPay · Système de gestion universitaire ultra intelligent
+          © {new Date().getFullYear()} Groupe GSI SmartPay · Système de gestion universitaire ultra intelligent
         </p>
       </div>
 

@@ -392,40 +392,55 @@ export function formatMGA(amount: number): string {
 
 /**
  * Calcule l'état du paiement de l'écolage.
- * Basé sur l'année scolaire (Octobre à Septembre).
  * "paye" si l'étudiant est à jour pour le mois actuel ou a tout payé.
- * "en_attente" si un paiement partiel a été fait mais n'est pas à jour.
- * "impaye" si aucun paiement n'a été fait.
+ * "en_attente" si un paiement partiel a été fait mais n'est pas à jour pour le mois actuel.
+ * "impaye" si aucun paiement n'a été fait pour couvrir au moins les mois passés.
+ * @param paye Montant total déjà payé
+ * @param du Montant total annuel dû
+ * @param mensuel Montant à payer par mois
+ * @param dateDebut Date de création de l'écolage (pour savoir quand l'obligation commence)
  */
-export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
-  // If annual tuition is 0 or less, they are unpaid until configured
+export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number, dateDebut?: string): "paye" | "impaye" | "en_attente" {
+  // Si le montant annuel est 0 ou moins, on considère comme impayé jusqu'à configuration
   if (du <= 0) return "impaye";
 
-  // If they paid the full annual amount, they are definitely "paye"
+  // Si tout est payé pour l'année
   if (paye >= du) return "paye";
 
-  // If no monthly ceiling is set, use simple annual comparison
+  // Si pas de montant mensuel configuré, on fait un calcul annuel simple
   if (!mensuel || mensuel <= 0) {
     return paye > 0 ? "en_attente" : "impaye";
   }
 
-  // Monthly logic requested: 1 full monthly payment = "paye" (green)
-  // This status should technically expire on the 1st of next month.
-  // We'll use the simplest interpretation: if (Total Paid % Monthly Amount) == 0 AND Total Paid > 0
-  // OR more accurately, if they have paid at least the current month's portion.
-
-  // To avoid the "pay twice" bug, we look at the current month's target.
   const now = new Date();
-  const currentMonthIndex = now.getMonth(); // 0-11
+  // On utilise la date de création ou par défaut le début de l'année scolaire (Octobre de l'année précédente si on est avant Octobre)
+  let startMonth: Date;
+  if (dateDebut) {
+    startMonth = new Date(dateDebut);
+  } else {
+    // Fallback dynamique: Octobre de l'année civile précédente si on est entre Janvier et Septembre
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0-11
+    if (curMonth < 9) { // Avant Octobre
+      startMonth = new Date(curYear - 1, 9, 1);
+    } else {
+      startMonth = new Date(curYear, 9, 1);
+    }
+  }
 
-  // The user uses March as a reference for renewal.
-  // relMonth 0 = March.
-  const relMonth = (currentMonthIndex - 2 + 12) % 12;
+  // Calcul du nombre de mois écoulés depuis le début de l'obligation
+  let monthsElapsed = (now.getFullYear() - startMonth.getFullYear()) * 12 + (now.getMonth() - startMonth.getMonth()) + 1;
+  if (monthsElapsed < 1) monthsElapsed = 1;
 
-  // Target: (relMonth + 1) payments of 'mensuel'
-  const target = (relMonth + 1) * mensuel;
+  // Cible pour être considéré "Payé" (avoir payé jusqu'au mois actuel inclus)
+  const targetFull = Math.min(du, monthsElapsed * mensuel);
 
-  if (paye >= target) return "paye";
-  if (paye > relMonth * mensuel) return "en_attente";
+  // Cible pour être considéré "En attente" (avoir payé au moins les mois précédents)
+  const targetPrevious = Math.min(du, (monthsElapsed - 1) * mensuel);
+
+  if (paye >= targetFull) return "paye";
+  // Si l'élève a payé au moins pour les mois précédents mais pas encore le mois actuel, il est "en attente"
+  // On s'assure aussi qu'un élève qui n'a rien payé du tout reste "impaye"
+  if (paye >= targetPrevious && paye > 0) return "en_attente";
   return "impaye";
 }

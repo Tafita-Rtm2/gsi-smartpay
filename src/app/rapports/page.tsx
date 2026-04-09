@@ -21,8 +21,10 @@ export default function RapportsPage() {
 
   // Filters for impression
   const [impMois,  setImpMois]  = useState("tous");
-  const [impAnnee, setImpAnnee] = useState("2026");
+  const [impAnnee, setImpAnnee] = useState(String(new Date().getFullYear()));
   const [impType,  setImpType]  = useState<"tous"|"paye"|"impaye">("tous");
+
+  const years = [String(new Date().getFullYear() - 1), String(new Date().getFullYear()), String(new Date().getFullYear() + 1)];
 
   const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
   const etabColor = etabInfo?.color || "#2563eb";
@@ -461,7 +463,7 @@ export default function RapportsPage() {
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">Annee</label>
                 <select value={impAnnee} onChange={e=>setImpAnnee(e.target.value)}
                   className="appearance-none w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-300">
-                  {["2025","2026","2027"].map(y=><option key={y}>{y}</option>)}
+                  {years.map(y=><option key={y}>{y}</option>)}
                 </select>
               </div>
               <div>
