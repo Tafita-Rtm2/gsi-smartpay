@@ -398,32 +398,34 @@ export function formatMGA(amount: number): string {
  * "impaye" si aucun paiement n'a été fait.
  */
 export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
+  // If annual tuition is 0 or less, they are unpaid until configured
   if (du <= 0) return "impaye";
-  if (paye >= du && du > 0) return "paye";
-  if (paye <= 0) return "impaye";
 
+  // If they paid the full annual amount, they are definitely "paye"
+  if (paye >= du) return "paye";
+
+  // If no monthly ceiling is set, use simple annual comparison
   if (!mensuel || mensuel <= 0) {
-    return "en_attente";
+    return paye > 0 ? "en_attente" : "impaye";
   }
 
-  // Calcul basé sur l'exemple utilisateur : Mars (Mois 1), Avril (Mois 2)...
+  // Monthly logic requested: 1 full monthly payment = "paye" (green)
+  // This status should technically expire on the 1st of next month.
+  // We'll use the simplest interpretation: if (Total Paid % Monthly Amount) == 0 AND Total Paid > 0
+  // OR more accurately, if they have paid at least the current month's portion.
+
+  // To avoid the "pay twice" bug, we look at the current month's target.
   const now = new Date();
-  const month = now.getMonth(); // 0=Jan, 1=Fev, 2=Mar...
+  const currentMonthIndex = now.getMonth(); // 0-11
 
-  // Index relatif à Mars (Mars = 0, Avril = 1, ...)
-  const relMonth = (month - 2 + 12) % 12;
+  // The user uses March as a reference for renewal.
+  // relMonth 0 = March.
+  const relMonth = (currentMonthIndex - 2 + 12) % 12;
 
-  // Montant cumulé attendu à la FIN du mois précédent
-  const expectedEndOfLastMonth = relMonth * mensuel;
-  // Montant cumulé attendu incluant le mois EN COURS
-  const expectedIncludingThisMonth = (relMonth + 1) * mensuel;
+  // Target: (relMonth + 1) payments of 'mensuel'
+  const target = (relMonth + 1) * mensuel;
 
-  // 1. Entièrement à jour pour ce mois
-  if (paye >= expectedIncludingThisMonth) return "paye";
-
-  // 2. À jour pour les mois passés, mais paiement partiel pour ce mois
-  if (paye > expectedEndOfLastMonth) return "en_attente";
-
-  // 3. En retard (n'a même pas fini de payer les mois passés)
+  if (paye >= target) return "paye";
+  if (paye > relMonth * mensuel) return "en_attente";
   return "impaye";
 }
