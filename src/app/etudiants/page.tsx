@@ -220,9 +220,6 @@ export default function EtudiantsPage() {
       const ok2b = selectedNiveaux.length === 0 || selectedNiveaux.includes(s.niveau || "L1");
 
       let ok3 = statutTab === "tous" || ec.statut === statutTab;
-      // Visually, if we are in "impaye" tab, we also show "en_attente" students
-      if (statutTab === "impaye" && ec.statut === "en_attente") ok3 = true;
-
       return ok1 && ok2 && ok2b && ok3;
     });
   }, [studentData, search, filiereFilter, selectedNiveaux, statutTab]);
@@ -578,9 +575,9 @@ export default function EtudiantsPage() {
 
   const STAT_TABS: { id: FilterTab; label: string; count: number; color: string; border: string; icon: React.ElementType }[] = [
     { id: "tous",       label: "Tous",       count: students.length, color: "text-slate-700",   border: "border-slate-400",   icon: Users        },
-    { id: "paye",       label: "Payes",      count: stats.paye,       color: "text-emerald-600", border: "border-emerald-400", icon: CheckCircle2 },
-    { id: "impaye",     label: "Impayes",    count: stats.impaye + stats.en_attente, color: "text-red-600", border: "border-red-400", icon: AlertTriangle},
-    { id: "en_attente", label: "En attente", count: stats.en_attente,    color: "text-amber-600",   border: "border-amber-400",   icon: Clock        },
+    { id: "paye",       label: "Payés",      count: stats.paye,       color: "text-emerald-600", border: "border-emerald-400", icon: CheckCircle2 },
+    { id: "impaye",     label: "Impayés",    count: stats.impaye, color: "text-red-600", border: "border-red-400", icon: AlertTriangle},
+    { id: "en_attente", label: "Partiels",   count: stats.en_attente, color: "text-amber-600",   border: "border-amber-400",   icon: Clock        },
   ];
 
   return (

@@ -407,20 +407,23 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
   }
 
   // Calcul basé sur l'exemple utilisateur : Mars (Mois 1), Avril (Mois 2)...
-  // Si on est en Mars, on doit avoir payé 1 * mensuel.
-  // Si on est en Avril, on doit avoir payé 2 * mensuel.
   const now = new Date();
   const month = now.getMonth(); // 0=Jan, 1=Fev, 2=Mar...
 
-  // Index relatif à Mars (Mars = 0)
-  // Formule: (month - 2 + 12) % 12
-  // Note: On utilise +1 pour inclure le mois en cours
+  // Index relatif à Mars (Mars = 0, Avril = 1, ...)
   const relMonth = (month - 2 + 12) % 12;
 
-  // Montant attendu à ce jour (cumulative)
-  const expectedToDate = (relMonth + 1) * mensuel;
+  // Montant cumulé attendu à la FIN du mois précédent
+  const expectedEndOfLastMonth = relMonth * mensuel;
+  // Montant cumulé attendu incluant le mois EN COURS
+  const expectedIncludingThisMonth = (relMonth + 1) * mensuel;
 
-  if (paye >= expectedToDate) return "paye";
+  // 1. Entièrement à jour pour ce mois
+  if (paye >= expectedIncludingThisMonth) return "paye";
 
+  // 2. À jour pour les mois passés, mais paiement partiel pour ce mois
+  if (paye > expectedEndOfLastMonth) return "en_attente";
+
+  // 3. En retard (n'a même pas fini de payer les mois passés)
   return "impaye";
 }
