@@ -71,7 +71,7 @@ export default function EtudiantsPage() {
   const [showConfig,      setShowConfig]      = useState(false);
   const [bulkAmount,      setBulkAmount]      = useState("");
   const [bulkMonthly,     setBulkMonthly]     = useState("");
-  const [selectedConfigLevels, setSelectedConfigLevels] = useState<string[]>([]);
+  const [selectedConfigLevels, setSelectedConfigLevels] = useState<string[]>(["L1", "L2", "L3", "M1", "M2"]);
   const [activeConfigFiliere, setActiveConfigFiliere] = useState("");
   const [localFees, setLocalFees] = useState<Record<string, { amount: number, monthlyAmount?: number }>>({});
 
