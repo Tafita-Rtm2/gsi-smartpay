@@ -171,7 +171,7 @@ export default function EtudiantsPage() {
     const finalMensuel = config ? (config.monthlyAmount ?? 0) : (realEc?.montantMensuel ?? 0);
     const finalPaye = realEc?.montantPaye ?? 0;
 
-    const intelligentStatut = calculateIntelligentStatus(finalPaye, finalDu, finalMensuel);
+    const intelligentStatut = calculateIntelligentStatus(finalPaye, finalDu, finalMensuel, realEc?.createdAt);
 
     return {
       id: realEc?.id || realEc?._id,
@@ -272,7 +272,7 @@ export default function EtudiantsPage() {
     const newMensuel = Number(localEcolageForm.montantMensuel);
 
     if (isAdmin) {
-      const st = calculateIntelligentStatus(editEcolage.montantPaye, newDu, newMensuel);
+      const st = calculateIntelligentStatus(editEcolage.montantPaye, newDu, newMensuel, editEcolage.createdAt);
       await updateEcolage(id, { montantDu: newDu, montantMensuel: newMensuel, statut: st });
       showAlert("Succès", "Écolage mis à jour.", "success");
     } else {
@@ -340,7 +340,7 @@ export default function EtudiantsPage() {
         if (payEcolage && (payEcolage.id || payEcolage._id)) {
           const diff = montant - editingPaiement.montant;
           const newPaye = payEcolage.montantPaye + diff;
-          const st = calculateIntelligentStatus(newPaye, payEcolage.montantDu, payEcolage.montantMensuel);
+          const st = calculateIntelligentStatus(newPaye, payEcolage.montantDu, payEcolage.montantMensuel, payEcolage.createdAt);
           await updateEcolage(payEcolage.id || payEcolage._id || "", {
             montantPaye: newPaye,
             statut: st,
@@ -374,7 +374,7 @@ export default function EtudiantsPage() {
       });
       if (payEcolage && (payEcolage.id || payEcolage._id)) {
         const newPaye = payEcolage.montantPaye + montant;
-        const st = calculateIntelligentStatus(newPaye, payEcolage.montantDu, payEcolage.montantMensuel);
+        const st = calculateIntelligentStatus(newPaye, payEcolage.montantDu, payEcolage.montantMensuel, payEcolage.createdAt);
         await updateEcolage(payEcolage.id || payEcolage._id || "", {
           montantPaye: newPaye,
           statut: st,
@@ -435,7 +435,7 @@ export default function EtudiantsPage() {
       if (config) {
         const ec = getEcolage(s);
         if (ec) {
-          const st = calculateIntelligentStatus(ec.montantPaye, config.amount, config.monthlyAmount);
+          const st = calculateIntelligentStatus(ec.montantPaye, config.amount, config.monthlyAmount, ec.createdAt);
           updates.push({
             id: ec.id || ec._id || "",
             data: { montantDu: config.amount, montantMensuel: config.monthlyAmount, statut: st }
@@ -532,7 +532,7 @@ export default function EtudiantsPage() {
         const ec = ecolages.find(e => e.etudiantId === deletePaiementObj.etudiantId);
         if (ec && (ec.id || ec._id)) {
           const newPaye = Math.max(0, ec.montantPaye - deletePaiementObj.montant);
-          const st = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
+          const st = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
           await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: st });
         }
         showAlert("Succès", "Paiement supprimé.", "info");
@@ -559,7 +559,7 @@ export default function EtudiantsPage() {
   };
 
   const getExpectedStatus = (ec: DBEcolage) => {
-    return calculateIntelligentStatus(ec.montantPaye, ec.montantDu, ec.montantMensuel);
+    return calculateIntelligentStatus(ec.montantPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
   };
 
   const Avatar = ({ s, size = 36 }: { s: DBStudent; size?: number }) => {
@@ -1236,7 +1236,15 @@ export default function EtudiantsPage() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">Date</label>
-                <input type="date" value={payForm.date} onChange={e=>setPayForm(f=>({...f,date:e.target.value}))}
+                <input type="date" value={payForm.date}
+                  onChange={e=>{
+                    const d = new Date(e.target.value);
+                    if (!isNaN(d.getTime())) {
+                      setPayForm(f=>({...f,date:e.target.value, mois: MOIS[d.getMonth()], annee: String(d.getFullYear()) }));
+                    } else {
+                      setPayForm(f=>({...f,date:e.target.value}));
+                    }
+                  }}
                   className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-300" />
               </div>
             </div>

@@ -397,7 +397,7 @@ export function formatMGA(amount: number): string {
  * "en_attente" si un paiement partiel a été fait mais n'est pas à jour.
  * "impaye" si aucun paiement n'a été fait.
  */
-export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number): "paye" | "impaye" | "en_attente" {
+export function calculateIntelligentStatus(paye: number, du: number, mensuel?: number, dateDebut?: string): "paye" | "impaye" | "en_attente" {
   // If annual tuition is 0 or less, they are unpaid until configured
   if (du <= 0) return "impaye";
 
@@ -409,23 +409,38 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
     return paye > 0 ? "en_attente" : "impaye";
   }
 
-  // Monthly logic requested: 1 full monthly payment = "paye" (green)
-  // This status should technically expire on the 1st of next month.
-  // We'll use the simplest interpretation: if (Total Paid % Monthly Amount) == 0 AND Total Paid > 0
-  // OR more accurately, if they have paid at least the current month's portion.
-
-  // To avoid the "pay twice" bug, we look at the current month's target.
   const now = new Date();
-  const currentMonthIndex = now.getMonth(); // 0-11
 
-  // The user uses March as a reference for renewal.
-  // relMonth 0 = March.
-  const relMonth = (currentMonthIndex - 2 + 12) % 12;
+  // Default school year start: March 1st.
+  // We calculate which March we are currently counting from.
+  let startMonth = 2; // Mars (0-indexed)
+  let startYear = now.getFullYear();
+  if (now.getMonth() < startMonth) startYear--;
 
-  // Target: (relMonth + 1) payments of 'mensuel'
+  let startDate = new Date(startYear, startMonth, 1);
+
+  // If a specific start date is provided (e.g. student registration date),
+  // we use it if it's more recent than the school year start.
+  if (dateDebut) {
+    const d = new Date(dateDebut);
+    if (!isNaN(d.getTime())) {
+      if (d > startDate) {
+        startDate = d;
+      }
+    }
+  }
+
+  // Calculate months elapsed since startDate
+  const monthsElapsed = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+  const relMonth = Math.max(0, monthsElapsed);
+
+  // Target to be "paye" (green): all months up to now must be fully paid.
   const target = (relMonth + 1) * mensuel;
 
   if (paye >= target) return "paye";
-  if (paye > relMonth * mensuel) return "en_attente";
+
+  // If they have paid something but not the full target, they are "en_attente" (yellow)
+  if (paye > 0) return "en_attente";
+
   return "impaye";
 }
