@@ -177,7 +177,7 @@ export default function AdminPage() {
             const ec = ecolages.find(e => (e.id || e._id) === req.targetId);
             if (ec) {
               const newDu = req.payload.montantDu;
-              const st = calculateIntelligentStatus(ec.montantPaye, newDu, ec.montantMensuel);
+              const st = calculateIntelligentStatus(ec.montantPaye, newDu, ec.montantMensuel, ec.createdAt);
               await updateEcolage(req.targetId, { montantDu: newDu, statut: st });
             }
           } else if (req.type === "delete_ecolage") {
@@ -195,7 +195,7 @@ export default function AdminPage() {
               if (ec) {
                 const diff = req.payload.montant - oldP.montant;
                 const newTotal = ec.montantPaye + diff;
-                const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
+                const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel, ec.createdAt);
                 await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
               }
             }
@@ -204,7 +204,7 @@ export default function AdminPage() {
             const ec = ecolages.find(e => e.etudiantId === req.payload.etudiantId);
             if (ec) {
               const newTotal = Math.max(0, ec.montantPaye - req.payload.montant);
-              const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel);
+              const st = calculateIntelligentStatus(newTotal, ec.montantDu, ec.montantMensuel, ec.createdAt);
               await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotal, statut: st });
             }
           }

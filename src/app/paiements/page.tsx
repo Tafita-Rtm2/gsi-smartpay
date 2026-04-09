@@ -208,7 +208,7 @@ export default function PaiementsPage() {
 
     if (ec && (ec.id || ec._id)) {
       const newPaye = ec.montantPaye + montant;
-      const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
+      const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
       await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
     }
 
@@ -248,7 +248,7 @@ export default function PaiementsPage() {
       if (ec && (ec.id || ec._id)) {
         const difference = newMontant - editingPaiement.montant;
         const newTotalPaye = ec.montantPaye + difference;
-        const newStatut = calculateIntelligentStatus(newTotalPaye, ec.montantDu, ec.montantMensuel);
+        const newStatut = calculateIntelligentStatus(newTotalPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
         await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotalPaye, statut: newStatut });
       }
       showAlert("Succès", "Le paiement a été mis à jour.", "success");
@@ -320,7 +320,7 @@ export default function PaiementsPage() {
         const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
         if (ec && (ec.id || ec._id)) {
           const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
-          const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
+          const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
           await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
         }
         showAlert("Succès", "Le paiement a été supprimé.", "info");
@@ -658,7 +658,14 @@ export default function PaiementsPage() {
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">Date du jour</label>
                 <input type="date" value={form.date}
-                  onChange={e => setForm(f=>({...f,date:e.target.value}))}
+                  onChange={e => {
+                    const d = new Date(e.target.value);
+                    if (!isNaN(d.getTime())) {
+                      setForm(f=>({...f, date: e.target.value, mois: MOIS[d.getMonth()], annee: String(d.getFullYear()) }));
+                    } else {
+                      setForm(f=>({...f,date:e.target.value}));
+                    }
+                  }}
                   className="w-full px-4 py-3 text-sm font-bold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
               </div>
             </div>
