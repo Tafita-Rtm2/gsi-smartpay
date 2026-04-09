@@ -33,6 +33,10 @@ export default function PaiementsPage() {
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split("T")[0]);
   const [filterMonth, setFilterMonth] = useState(MOIS[new Date().getMonth()]);
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const years = useMemo(() => {
+    const cur = new Date().getFullYear();
+    return [String(cur - 1), String(cur), String(cur + 1), String(cur + 2)];
+  }, []);
   const [filterType, setFilterType] = useState<"jour" | "mois" | "annee">("mois");
   const [selectedNiveaux, setSelectedNiveaux] = useState<string[]>([]);
 
@@ -61,6 +65,18 @@ export default function PaiementsPage() {
     preuveFilename: "",
     note:    "",
   });
+
+  // Sync mois/annee with date
+  useEffect(() => {
+    const d = new Date(form.date);
+    if (!isNaN(d.getTime())) {
+      setForm(f => ({
+        ...f,
+        mois: MOIS[d.getMonth()],
+        annee: String(d.getFullYear())
+      }));
+    }
+  }, [form.date]);
 
   // Custom UI Modals state
   const [modalConfig, setModalConfig] = useState<{
@@ -170,7 +186,7 @@ export default function PaiementsPage() {
         montantDu: amount,
         montantPaye: 0,
         statut: "impaye",
-        annee: "2026",
+        annee: String(new Date().getFullYear()),
       }) || undefined;
     }
 
@@ -208,7 +224,7 @@ export default function PaiementsPage() {
 
     if (ec && (ec.id || ec._id)) {
       const newPaye = ec.montantPaye + montant;
-      const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
+      const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
       await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
     }
 
@@ -248,7 +264,7 @@ export default function PaiementsPage() {
       if (ec && (ec.id || ec._id)) {
         const difference = newMontant - editingPaiement.montant;
         const newTotalPaye = ec.montantPaye + difference;
-        const newStatut = calculateIntelligentStatus(newTotalPaye, ec.montantDu, ec.montantMensuel);
+        const newStatut = calculateIntelligentStatus(newTotalPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
         await updateEcolage(ec.id || ec._id || "", { montantPaye: newTotalPaye, statut: newStatut });
       }
       showAlert("Succès", "Le paiement a été mis à jour.", "success");
@@ -320,7 +336,7 @@ export default function PaiementsPage() {
         const ec = ecolages.find(e => e.etudiantId === deleteConfirm.etudiantId);
         if (ec && (ec.id || ec._id)) {
           const newPaye = Math.max(0, ec.montantPaye - deleteConfirm.montant);
-          const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel);
+          const newStatut = calculateIntelligentStatus(newPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
           await updateEcolage(ec.id || ec._id || "", { montantPaye: newPaye, statut: newStatut });
         }
         showAlert("Succès", "Le paiement a été supprimé.", "info");
@@ -430,14 +446,14 @@ export default function PaiementsPage() {
                 </select>
                 <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
                   className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold">
-                  {["2024", "2025", "2026", "2027"].map(y => <option key={y} value={y}>{y}</option>)}
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </>
             )}
             {filterType === "annee" && (
               <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
                 className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white outline-none font-bold">
-                {["2024", "2025", "2026", "2027"].map(y => <option key={y} value={y}>{y}</option>)}
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             )}
           </div>
@@ -640,7 +656,7 @@ export default function PaiementsPage() {
                 <div className="relative">
                   <select value={form.annee} onChange={e => setForm(f=>({...f,annee:e.target.value}))}
                     className="appearance-none w-full px-4 py-3 text-sm font-bold border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all">
-                    {["2025","2026","2027"].map(y => <option key={y}>{y}</option>)}
+                    {years.map(y => <option key={y}>{y}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
