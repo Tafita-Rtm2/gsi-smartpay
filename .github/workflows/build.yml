@@ -19,28 +19,31 @@ jobs:
       - name: Installation des dépendances
         run: npm install
 
-      - name: Build de l'application
-        run: npm run build
+      - name: Build de l'application (SÉCURISÉ)
+        # Bloque la création des Source Maps au niveau de Node/React/Angular
+        run: GENERATE_SOURCEMAP=false npm run build
 
-      - name: Organisation des fichiers pour cPanel
+      - name: Organisation des fichiers et Nettoyage
         run: |
           mkdir -p deploy
 
-          # 1. Copie le frontend statique généré dans "out/"
-          cp -r out deploy/out
+          # Supprime tous les fichiers .map par sécurité s'ils existent dans le dossier de build
+          # (Remplace "out" par "dist" si ton dossier de sortie s'appelle dist)
+          find out/ -name "*.map" -type f -delete
 
-          # 2. Copie le serveur API léger
+          # 1. Copie le frontend statique (sans les fichiers de débogage)
+          cp -r out/* deploy/
+
+          # 2. Copie les fichiers serveurs essentiels
           cp server.js deploy/server.js
-
-          # 3. Copie le package.json (essentiel pour npm install sur cPanel)
           cp package.json deploy/package.json
 
-          # 4. Copie le dossier public par sécurité
+          # 3. Copie le dossier public si existant
           if [ -d "public" ]; then cp -r public deploy/public; fi
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gsi-smartpay-full-package
+          name: gsi-smartpay-full
           path: deploy/
-          include-hidden-files: true
+          include-hidden-files: false
