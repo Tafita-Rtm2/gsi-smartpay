@@ -2,12 +2,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Edit3, Upload, Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA, calculateIntelligentStatus } from "@/lib/api";
+import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA, calculateIntelligentStatus, getNextPaymentPeriod, MOIS } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 import clsx from "clsx";
 import CustomModal from "@/components/CustomModal";
-
-const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
 function normalizeString(str: any) {
   if (typeof str !== 'string') return "";
@@ -65,18 +63,6 @@ export default function PaiementsPage() {
     preuveFilename: "",
     note:    "",
   });
-
-  // Sync mois/annee with date
-  useEffect(() => {
-    const d = new Date(form.date);
-    if (!isNaN(d.getTime())) {
-      setForm(f => ({
-        ...f,
-        mois: MOIS[d.getMonth()],
-        annee: String(d.getFullYear())
-      }));
-    }
-  }, [form.date]);
 
   // Custom UI Modals state
   const [modalConfig, setModalConfig] = useState<{
@@ -826,7 +812,15 @@ export default function PaiementsPage() {
                     const initials = getStudentName(s).split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase();
                     return (
                       <button key={getStudentId(s)}
-                        onClick={() => { setSelectedStudent(s); setShowStudentPicker(false); }}
+                        onClick={() => {
+                          setSelectedStudent(s);
+                          setShowStudentPicker(false);
+                          // Auto-update form with next due period
+                          if (ec) {
+                            const { mois, annee } = getNextPaymentPeriod(ec.montantPaye, ec.montantDu, ec.montantMensuel, ec.createdAt);
+                            setForm(f => ({ ...f, mois, annee }));
+                          }
+                        }}
                         className="w-full flex items-center gap-5 px-5 py-4 hover:bg-slate-50 rounded-2xl transition-all text-left group">
                         <div className="w-14 h-14 rounded-[1rem] flex items-center justify-center text-white text-base font-black shrink-0 shadow-lg group-hover:scale-105 transition-transform"
                           style={{ background: etabColor }}>
