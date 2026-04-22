@@ -173,11 +173,13 @@ export default function EtudiantsPage() {
     const sNiveau = s.niveau || "L1";
 
     // On cherche d'abord la configuration globale (qui prime sur tout)
-    const config = appState.programFees.find(p =>
-      p.campus.toLowerCase() === campus &&
-      normalizeString(p.filiere) === normalizeString(sFiliere) &&
-      p.niveau === sNiveau
-    );
+    const config = appState.programFees.find(p => {
+      const pFilNorm = normalizeString(p.filiere);
+      const sFilNorm = normalizeString(sFiliere);
+      return p.campus.toLowerCase() === campus &&
+             (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
+             p.niveau === sNiveau;
+    });
 
     const realEc = getEcolage(s);
 
@@ -232,7 +234,12 @@ export default function EtudiantsPage() {
     return studentData.filter(({ student: s, effectiveEcolage: ec }) => {
       const name = getStudentName(s).toLowerCase();
       const ok1 = !q || name.includes(q) || (s.matricule||"").toLowerCase().includes(q) || (s.email||"").toLowerCase().includes(q);
-      const ok2 = filiereFilter === "Toutes" || normalizeString(s.filiere||"") === normFiliereFilter;
+
+      const sFiliereNorm = normalizeString(s.filiere || "");
+      const ok2 = filiereFilter === "Toutes" ||
+                  sFiliereNorm.includes(normFiliereFilter) ||
+                  normFiliereFilter.includes(sFiliereNorm);
+
       const ok2b = selectedNiveaux.length === 0 || selectedNiveaux.includes(s.niveau || "L1");
 
       let ok3 = statutTab === "tous" || ec.statut === statutTab;
@@ -443,10 +450,11 @@ export default function EtudiantsPage() {
       const sFiliere = s.filiere || "";
       const sNiveau = s.niveau || "L1";
 
-      const config = dataList.find(p =>
-        normalizeString(p.filiere) === normalizeString(sFiliere) &&
-        p.niveau === sNiveau
-      );
+      const config = dataList.find(p => {
+        const pFilNorm = normalizeString(p.filiere);
+        const sFilNorm = normalizeString(sFiliere);
+        return (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === sNiveau;
+      });
 
       if (config) {
         const ec = getEcolage(s);
@@ -760,11 +768,13 @@ export default function EtudiantsPage() {
                   {filtered.map(({ student: s, effectiveEcolage: ec }) => {
                     const realEc = getEcolage(s);
                     const statut = ec.statut;
-                    const config = appState.programFees.find(p =>
-                      p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
-                      normalizeString(p.filiere) === normalizeString(s.filiere || "") &&
-                      p.niveau === (s.niveau || "L1")
-                    );
+                    const config = appState.programFees.find(p => {
+                      const pFilNorm = normalizeString(p.filiere);
+                      const sFilNorm = normalizeString(s.filiere || "");
+                      return p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
+                             (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
+                             p.niveau === (s.niveau || "L1");
+                    });
                     return (
                       <tr key={getStudentId(s)} className="hover:bg-slate-50/60 transition-colors">
                         <td className="px-4 py-3">
@@ -796,7 +806,11 @@ export default function EtudiantsPage() {
                               <span className="text-slate-300 text-[10px] font-black uppercase italic">Non défini</span>
                               {(() => {
                                 const campus = (s.campus || "").toLowerCase();
-                                const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(s.filiere || "") && p.niveau === (s.niveau || "L1"));
+                                const config = appState.programFees.find(p => {
+                                  const pFilNorm = normalizeString(p.filiere);
+                                  const sFilNorm = normalizeString(s.filiere || "");
+                                  return p.campus === campus && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (s.niveau || "L1");
+                                });
                                 if (config && config.amount > 0) return <div className="text-[10px] font-black text-brand-500 uppercase tracking-tighter">Prévu: {formatMGA(config.amount)}</div>;
                                 return null;
                               })()}
@@ -850,11 +864,13 @@ export default function EtudiantsPage() {
               {filtered.map(({ student: s, effectiveEcolage: ec }) => {
                 const realEc = getEcolage(s);
                 const statut = ec.statut;
-                const config = appState.programFees.find(p =>
-                  p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
-                  normalizeString(p.filiere) === normalizeString(s.filiere || "") &&
-                  p.niveau === (s.niveau || "L1")
-                );
+                const config = appState.programFees.find(p => {
+                  const pFilNorm = normalizeString(p.filiere);
+                  const sFilNorm = normalizeString(s.filiere || "");
+                  return p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
+                         (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
+                         p.niveau === (s.niveau || "L1");
+                });
                 return (
                   <div key={getStudentId(s)} className="p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -1002,7 +1018,11 @@ export default function EtudiantsPage() {
                           </div>
                           {(() => {
                             const campus = (profileStudent.campus || "").toLowerCase();
-                            const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(profileStudent.filiere || "") && p.niveau === (profileStudent.niveau || "L1"));
+                            const config = appState.programFees.find(p => {
+                              const pFilNorm = normalizeString(p.filiere);
+                              const sFilNorm = normalizeString(profileStudent.filiere || "");
+                              return p.campus === campus && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
+                            });
                             if (config && config.amount > 0 && config.amount !== ec.montantDu) {
                               return (
                                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10px] font-bold text-amber-700 animate-pulse">
@@ -1019,7 +1039,11 @@ export default function EtudiantsPage() {
                           <div className="text-slate-400 text-xs font-medium italic">Aucun dossier d&apos;écolage initialisé.</div>
                           {(() => {
                             const campus = (profileStudent.campus || "").toLowerCase();
-                            const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(profileStudent.filiere || "") && p.niveau === (profileStudent.niveau || "L1"));
+                            const config = appState.programFees.find(p => {
+                              const pFilNorm = normalizeString(p.filiere);
+                              const sFilNorm = normalizeString(profileStudent.filiere || "");
+                              return p.campus === campus && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
+                            });
                             if (config && config.amount > 0) {
                               return (
                                 <div className="inline-block px-4 py-2 bg-brand-50 text-brand-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-brand-100">

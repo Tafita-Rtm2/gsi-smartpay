@@ -150,10 +150,16 @@ export default function PaiementsPage() {
   }, [paiements, search, filterType, filterDate, filterMonth, filterYear, selectedNiveaux]);
 
   const filteredStudents = useMemo(() => {
+    const normFiliereFilter = normalizeString(filiereFilter);
     return students.filter(s => {
       const q = studentSearch.toLowerCase();
       const matchSearch = getStudentName(s).toLowerCase().includes(q) || (s.matricule || "").toLowerCase().includes(q);
-      const matchFiliere = filiereFilter === "Toutes" || (s.filiere || "") === filiereFilter;
+
+      const sFiliereNorm = normalizeString(s.filiere || "");
+      const matchFiliere = filiereFilter === "Toutes" ||
+                           sFiliereNorm.includes(normFiliereFilter) ||
+                           normFiliereFilter.includes(sFiliereNorm);
+
       return matchSearch && matchFiliere;
     });
   }, [students, studentSearch, filiereFilter]);
@@ -173,7 +179,13 @@ export default function PaiementsPage() {
       const campus = (selectedStudent.campus || "").toLowerCase();
       const sFiliere = selectedStudent.filiere || "";
       const sNiveau = selectedStudent.niveau || "L1";
-      const config = appState.programFees.find(p => p.campus === campus && normalizeString(p.filiere) === normalizeString(sFiliere));
+      const config = appState.programFees.find(p => {
+        const pFilNorm = normalizeString(p.filiere);
+        const sFilNorm = normalizeString(sFiliere);
+        return p.campus.toLowerCase() === campus &&
+               (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
+               p.niveau === sNiveau;
+      });
       const amount = config?.amount || 1500000;
       const { createEcolage } = await import("@/lib/api");
       ec = await createEcolage({
