@@ -407,10 +407,8 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
   // Si tout est payé pour l'année
   if (paye >= du) return "paye";
 
-  // Si pas de montant mensuel configuré, on fait un calcul annuel simple
-  if (!mensuel || mensuel <= 0) {
-    return paye > 0 ? "en_attente" : "impaye";
-  }
+  // Si pas de montant mensuel configuré, on utilise un défaut (1/10 du total) pour permettre le calcul
+  const effectiveMensuel = (mensuel && mensuel > 0) ? mensuel : du / 10;
 
   const now = new Date();
   // On utilise la date de création ou par défaut le début de l'année scolaire (Octobre de l'année précédente si on est avant Octobre)
@@ -430,13 +428,14 @@ export function calculateIntelligentStatus(paye: number, du: number, mensuel?: n
 
   // Calcul du nombre de mois écoulés depuis le début de l'obligation
   let monthsElapsed = (now.getFullYear() - startMonth.getFullYear()) * 12 + (now.getMonth() - startMonth.getMonth()) + 1;
+  // Si on est avant la date de début, on considère qu'on est au mois 1
   if (monthsElapsed < 1) monthsElapsed = 1;
 
   // Cible pour être considéré "Payé" (avoir payé jusqu'au mois actuel inclus)
-  const targetFull = Math.min(du, monthsElapsed * mensuel);
+  const targetFull = Math.min(du, monthsElapsed * effectiveMensuel);
 
   // Cible pour être considéré "En attente" (avoir payé au moins les mois précédents)
-  const targetPrevious = Math.min(du, (monthsElapsed - 1) * mensuel);
+  const targetPrevious = Math.min(du, (monthsElapsed - 1) * effectiveMensuel);
 
   if (paye >= targetFull) return "paye";
   // Si l'élève a payé au moins pour les mois précédents mais pas encore le mois actuel, il est "en attente"
