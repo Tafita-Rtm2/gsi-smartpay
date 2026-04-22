@@ -14,7 +14,7 @@ import {
   updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
   DBStudent, DBEcolage, DBPaiement,
   getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE,
-  calculateIntelligentStatus
+  calculateIntelligentStatus, getNextPaymentPeriod, MOIS
 } from "@/lib/api";
 import clsx from "clsx";
 import CustomModal from "@/components/CustomModal";
@@ -26,7 +26,6 @@ const STATUT_COLORS = {
 };
 const STATUT_LABELS = { paye: "Paye", impaye: "Impaye", en_attente: "En attente" };
 const STATUT_DOT   = { paye: "bg-emerald-500", impaye: "bg-red-500", en_attente: "bg-amber-500" };
-const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 type FilterTab = "tous" | "paye" | "impaye" | "en_attente";
 
 function normalizeString(str: any) {
@@ -86,18 +85,6 @@ export default function EtudiantsPage() {
     montant: "", date: new Date().toISOString().split("T")[0], note: "",
     mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "",
   });
-
-  // Sync mois/annee with date
-  useEffect(() => {
-    const d = new Date(payForm.date);
-    if (!isNaN(d.getTime())) {
-      setPayForm(f => ({
-        ...f,
-        mois: MOIS[d.getMonth()],
-        annee: String(d.getFullYear())
-      }));
-    }
-  }, [payForm.date]);
 
   // Custom UI Modals
   const [modalConfig, setModalConfig] = useState<{
@@ -276,7 +263,8 @@ export default function EtudiantsPage() {
     }
     setPayStudent(s);
     setPayEcolage(effEc);
-    setPayForm({ mois: MOIS[new Date().getMonth()], annee: String(new Date().getFullYear()), montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
+    const { mois, annee } = getNextPaymentPeriod(effEc.montantPaye, effEc.montantDu, effEc.montantMensuel, ec?.createdAt);
+    setPayForm({ mois, annee, montant: "", date: new Date().toISOString().split("T")[0], note: "", mode: "Especes", transactionRef: "", preuve: "", preuveFilename: "" });
   };
 
   const openEditEcolage = (ec: DBEcolage) => {

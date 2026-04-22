@@ -386,8 +386,51 @@ export function getStudentName(s: DBStudent): string {
 export function getStudentCampus(s: DBStudent): string {
   return (s.campus || "").toLowerCase();
 }
+export const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
+
 export function formatMGA(amount: number): string {
   return new Intl.NumberFormat("fr-MG").format(amount) + " Ar";
+}
+
+/**
+ * Calcule la période suivante à payer pour un étudiant.
+ * @param paye Montant total déjà payé
+ * @param du Montant total annuel dû
+ * @param mensuel Montant à payer par mois
+ * @param dateDebut Date de création de l'écolage
+ */
+export function getNextPaymentPeriod(paye: number, du: number, mensuel?: number, dateDebut?: string): { mois: string, annee: string } {
+  const effectiveMensuel = (mensuel && mensuel > 0) ? mensuel : du / 10;
+
+  const now = new Date();
+  let startMonth: Date;
+  if (dateDebut) {
+    startMonth = new Date(dateDebut);
+  } else {
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    if (curMonth < 9) { // Avant Octobre
+      startMonth = new Date(curYear - 1, 9, 1);
+    } else {
+      startMonth = new Date(curYear, 9, 1);
+    }
+  }
+
+  // Calcul du nombre de mois déjà couverts par les paiements
+  // On arrondit à l'inférieur pour trouver le dernier mois COMPLÈTEMENT payé
+  const monthsPaid = Math.floor(paye / effectiveMensuel);
+
+  // Le mois suivant à payer est (startMonth + monthsPaid)
+  const nextDate = new Date(startMonth);
+  nextDate.setMonth(startMonth.getMonth() + monthsPaid);
+
+  // Si le mois calculé est dans le futur par rapport à aujourd'hui, on peut suggérer le mois actuel
+  // mais la logique demandée est de couvrir les retards d'abord.
+
+  return {
+    mois: MOIS[nextDate.getMonth()],
+    annee: String(nextDate.getFullYear())
+  };
 }
 
 /**
