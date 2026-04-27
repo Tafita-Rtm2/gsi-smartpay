@@ -24,8 +24,11 @@ export default function DashboardPage() {
     setLoading(true);
     const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
     if (!isAdmin && currentUser) {
-      const myEtab = currentUser.etablissement;
-      const myS = s.filter(st => (st.campus || "").toLowerCase().includes(myEtab));
+      const myEtab = (currentUser.etablissement || "").toLowerCase();
+      const myS = s.filter(st => {
+        const sC = (st.campus || "").toLowerCase();
+        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+      });
       const myIds = new Set(myS.map(st => getStudentId(st)));
       setStudents(myS);
       setEcolages(e.filter(ec => myIds.has(ec.etudiantId)));

@@ -13,7 +13,8 @@ function normalizeString(str: any) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/&/g, "et")
+    .replace(/[&]/g, " ")
+    .replace(/\bet\b/g, " ")
     .replace(/hote(l+)erie/g, "hotellerie")
     .replace(/voyage(s?)/g, "voyage")
     .replace(/[^a-z0-9]/g, " ")
@@ -97,8 +98,11 @@ export default function PaiementsPage() {
     try {
       const [p, s, e] = await Promise.all([fetchPaiements(), fetchStudents(), fetchEcolages()]);
       if (!isAdmin && currentUser) {
-        const myEtab = currentUser.etablissement;
-        const myS = s.filter(st => (st.campus || "").toLowerCase().includes(myEtab));
+        const myEtab = (currentUser.etablissement || "").toLowerCase();
+        const myS = s.filter(st => {
+          const sC = (st.campus || "").toLowerCase();
+          return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+        });
         const myIds = new Set(myS.map(st => getStudentId(st)));
         setPaiements(p.filter(pay => myIds.has(pay.etudiantId)));
         setStudents(myS);
@@ -168,7 +172,14 @@ export default function PaiementsPage() {
       const config = appState.programFees.find(p => {
         const pFilNorm = normalizeString(p.filiere);
         const sFilNorm = normalizeString(sFiliere);
-        return p.campus.toLowerCase() === campus &&
+        const pC = p.campus.toLowerCase();
+        const sC = campus.toLowerCase();
+
+        const campusMatch = (sC === pC) ||
+                            (sC === "antsirabe" && pC === "ants") ||
+                            (sC === "ants" && pC === "antsirabe");
+
+        return campusMatch &&
                (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
                p.niveau === sNiveau;
       });

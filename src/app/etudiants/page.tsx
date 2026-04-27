@@ -34,7 +34,8 @@ function normalizeString(str: any) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/&/g, "et")
+    .replace(/[&]/g, " ")
+    .replace(/\bet\b/g, " ")
     .replace(/hote(l+)erie/g, "hotellerie")
     .replace(/voyage(s?)/g, "voyage")
     .replace(/[^a-z0-9]/g, " ")
@@ -125,8 +126,11 @@ export default function EtudiantsPage() {
     try {
       const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
       if (!isAdmin && currentUser) {
-        const myEtab = currentUser.etablissement;
-        const myS = s.filter(st => getStudentCampus(st).includes(myEtab) || getStudentCampus(st).includes(myEtab.slice(0,4)));
+      const myEtab = (currentUser.etablissement || "").toLowerCase();
+      const myS = s.filter(st => {
+        const sC = getStudentCampus(st).toLowerCase();
+        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+      });
         const myIds = new Set(myS.map(st => getStudentId(st)));
         setStudents(myS);
         setEcolages(e.filter(ec => myIds.has(ec.etudiantId)));
@@ -163,7 +167,14 @@ export default function EtudiantsPage() {
     const config = appState.programFees.find(p => {
       const pFilNorm = normalizeString(p.filiere);
       const sFilNorm = normalizeString(sFiliere);
-      return p.campus.toLowerCase() === campus &&
+      const pC = p.campus.toLowerCase();
+      const sC = campus.toLowerCase();
+
+      const campusMatch = (sC === pC) ||
+                          (sC === "antsirabe" && pC === "ants") ||
+                          (sC === "ants" && pC === "antsirabe");
+
+      return campusMatch &&
              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
              p.niveau === sNiveau;
     });
@@ -437,11 +448,20 @@ export default function EtudiantsPage() {
     for (const s of campusStudents) {
       const sFiliere = s.filiere || "";
       const sNiveau = s.niveau || "L1";
+      const sC = (s.campus || "").toLowerCase();
 
       const config = dataList.find(p => {
         const pFilNorm = normalizeString(p.filiere);
         const sFilNorm = normalizeString(sFiliere);
-        return (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === sNiveau;
+        const pC = p.campus.toLowerCase();
+
+        const campusMatch = (sC === pC) ||
+                            (sC === "antsirabe" && pC === "ants") ||
+                            (sC === "ants" && pC === "antsirabe");
+
+        return campusMatch &&
+               (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
+               p.niveau === sNiveau;
       });
 
       if (config) {
@@ -759,7 +779,14 @@ export default function EtudiantsPage() {
                     const config = appState.programFees.find(p => {
                       const pFilNorm = normalizeString(p.filiere);
                       const sFilNorm = normalizeString(s.filiere || "");
-                      return p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
+                      const pC = p.campus.toLowerCase();
+                      const sC = (s.campus || "").toLowerCase();
+
+                      const campusMatch = (sC === pC) ||
+                                          (sC === "antsirabe" && pC === "ants") ||
+                                          (sC === "ants" && pC === "antsirabe");
+
+                      return campusMatch &&
                              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
                              p.niveau === (s.niveau || "L1");
                     });
@@ -797,7 +824,14 @@ export default function EtudiantsPage() {
                                 const config = appState.programFees.find(p => {
                                   const pFilNorm = normalizeString(p.filiere);
                                   const sFilNorm = normalizeString(s.filiere || "");
-                                  return p.campus === campus && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (s.niveau || "L1");
+                                  const pC = p.campus.toLowerCase();
+                                  const sC = campus.toLowerCase();
+
+                                  const campusMatch = (sC === pC) ||
+                                                      (sC === "antsirabe" && pC === "ants") ||
+                                                      (sC === "ants" && pC === "antsirabe");
+
+                                  return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (s.niveau || "L1");
                                 });
                                 if (config && config.amount > 0) return <div className="text-[10px] font-black text-brand-500 uppercase tracking-tighter">Prévu: {formatMGA(config.amount)}</div>;
                                 return null;
@@ -1009,7 +1043,14 @@ export default function EtudiantsPage() {
                             const config = appState.programFees.find(p => {
                               const pFilNorm = normalizeString(p.filiere);
                               const sFilNorm = normalizeString(profileStudent.filiere || "");
-                              return p.campus === campus && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
+                              const pC = p.campus.toLowerCase();
+                              const sC = campus.toLowerCase();
+
+                              const campusMatch = (sC === pC) ||
+                                                  (sC === "antsirabe" && pC === "ants") ||
+                                                  (sC === "ants" && pC === "antsirabe");
+
+                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
                             });
                             if (config && config.amount > 0 && config.amount !== ec.montantDu) {
                               return (
@@ -1030,7 +1071,14 @@ export default function EtudiantsPage() {
                             const config = appState.programFees.find(p => {
                               const pFilNorm = normalizeString(p.filiere);
                               const sFilNorm = normalizeString(profileStudent.filiere || "");
-                              return p.campus === campus && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
+                              const pC = p.campus.toLowerCase();
+                              const sC = campus.toLowerCase();
+
+                              const campusMatch = (sC === pC) ||
+                                                  (sC === "antsirabe" && pC === "ants") ||
+                                                  (sC === "ants" && pC === "antsirabe");
+
+                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
                             });
                             if (config && config.amount > 0) {
                               return (
