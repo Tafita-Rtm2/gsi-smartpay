@@ -73,8 +73,11 @@ export default function JournalPage() {
     try {
       const pays = await fetchPaiements();
       if (!isAdmin && currentUser) {
-        const myEtab = currentUser.etablissement;
-        setPaiements(pays.filter(p => (p.campus || "").toLowerCase().includes(myEtab)));
+        const myEtab = (currentUser.etablissement || "").toLowerCase();
+        setPaiements(pays.filter(p => {
+          const sC = (p.campus || "").toLowerCase();
+          return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+        }));
       } else {
         setPaiements(pays);
       }

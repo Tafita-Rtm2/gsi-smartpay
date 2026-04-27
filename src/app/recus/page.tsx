@@ -23,8 +23,11 @@ export default function RecusPage() {
     pays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     if (!isAdmin && currentUser) {
-      const myEtab = currentUser.etablissement;
-      const myIds = new Set(studs.filter(s => (s.campus || "").toLowerCase().includes(myEtab)).map(s => getStudentId(s)));
+      const myEtab = (currentUser.etablissement || "").toLowerCase();
+      const myIds = new Set(studs.filter(s => {
+        const sC = (s.campus || "").toLowerCase();
+        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+      }).map(s => getStudentId(s)));
       setPaiements(pays.filter(p => myIds.has(p.etudiantId)));
     } else {
       setPaiements(pays);
