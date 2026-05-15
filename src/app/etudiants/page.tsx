@@ -14,7 +14,7 @@ import {
   updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
   DBStudent, DBEcolage, DBPaiement,
   getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE,
-  calculateIntelligentStatus, getNextPaymentPeriod, MOIS
+  calculateIntelligentStatus, getNextPaymentPeriod, MOIS, isSameCampus, normalizeString
 } from "@/lib/api";
 import clsx from "clsx";
 import CustomModal from "@/components/CustomModal";
@@ -27,21 +27,6 @@ const STATUT_COLORS = {
 const STATUT_LABELS = { paye: "Paye", impaye: "Impaye", en_attente: "En attente" };
 const STATUT_DOT   = { paye: "bg-emerald-500", impaye: "bg-red-500", en_attente: "bg-amber-500" };
 type FilterTab = "tous" | "paye" | "impaye" | "en_attente";
-
-function normalizeString(str: any) {
-  if (typeof str !== 'string') return "";
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[&]/g, " ")
-    .replace(/\bet\b/g, " ")
-    .replace(/hote(l+)erie/g, "hotellerie")
-    .replace(/voyage(s?)/g, "voyage")
-    .replace(/[^a-z0-9]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export default function EtudiantsPage() {
   const { currentUser, appState, setProgramFee, setProgramFeesBulk, deleteProgramFee } = useAuth();
@@ -126,10 +111,10 @@ export default function EtudiantsPage() {
     try {
       const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
       if (!isAdmin && currentUser) {
-      const myEtab = (currentUser.etablissement || "").toLowerCase();
+      const myEtab = (currentUser.etablissement || "");
       const myS = s.filter(st => {
-        const sC = getStudentCampus(st).toLowerCase();
-        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+        const sC = getStudentCampus(st);
+        return isSameCampus(sC, myEtab);
       });
         const myIds = new Set(myS.map(st => getStudentId(st)));
         setStudents(myS);
@@ -167,12 +152,10 @@ export default function EtudiantsPage() {
     const config = appState.programFees.find(p => {
       const pFilNorm = normalizeString(p.filiere);
       const sFilNorm = normalizeString(sFiliere);
-      const pC = p.campus.toLowerCase();
-      const sC = campus.toLowerCase();
+      const pC = p.campus;
+      const sC = campus;
 
-      const campusMatch = (sC === pC) ||
-                          (sC === "antsirabe" && pC === "ants") ||
-                          (sC === "ants" && pC === "antsirabe");
+      const campusMatch = isSameCampus(sC, pC);
 
       return campusMatch &&
              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
@@ -438,9 +421,9 @@ export default function EtudiantsPage() {
     await setProgramFeesBulk(dataList);
 
     const { bulkUpdateEcolages, bulkCreateEcolages } = await import("@/lib/api");
-    const myEtab = (currentUser.etablissement || "").toLowerCase();
+    const myEtab = (currentUser.etablissement || "");
 
-    const campusStudents = students.filter(s => (s.campus || "").toLowerCase().includes(myEtab) || (s.campus || "").toLowerCase().includes(myEtab.slice(0,4)));
+    const campusStudents = students.filter(s => isSameCampus(s.campus || "", myEtab));
 
     const updates = [];
     const creates = [];
@@ -453,11 +436,9 @@ export default function EtudiantsPage() {
       const config = dataList.find(p => {
         const pFilNorm = normalizeString(p.filiere);
         const sFilNorm = normalizeString(sFiliere);
-        const pC = p.campus.toLowerCase();
+        const pC = p.campus;
 
-        const campusMatch = (sC === pC) ||
-                            (sC === "antsirabe" && pC === "ants") ||
-                            (sC === "ants" && pC === "antsirabe");
+        const campusMatch = isSameCampus(sC, pC);
 
         return campusMatch &&
                (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
@@ -667,7 +648,7 @@ export default function EtudiantsPage() {
           <button onClick={() => {
             const initial: any = {};
             appState.programFees.forEach(f => {
-              if (f.campus === currentUser?.etablissement) {
+              if (isSameCampus(f.campus, currentUser?.etablissement || "")) {
                 initial[`${f.filiere}:::${f.niveau}`] = { amount: f.amount, monthlyAmount: f.monthlyAmount };
               }
             });
@@ -779,12 +760,10 @@ export default function EtudiantsPage() {
                     const config = appState.programFees.find(p => {
                       const pFilNorm = normalizeString(p.filiere);
                       const sFilNorm = normalizeString(s.filiere || "");
-                      const pC = p.campus.toLowerCase();
-                      const sC = (s.campus || "").toLowerCase();
+                      const pC = p.campus;
+                      const sC = (s.campus || "");
 
-                      const campusMatch = (sC === pC) ||
-                                          (sC === "antsirabe" && pC === "ants") ||
-                                          (sC === "ants" && pC === "antsirabe");
+                      const campusMatch = isSameCampus(sC, pC);
 
                       return campusMatch &&
                              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
@@ -820,16 +799,14 @@ export default function EtudiantsPage() {
                             <div className="space-y-1">
                               <span className="text-slate-300 text-[10px] font-black uppercase italic">Non défini</span>
                               {(() => {
-                                const campus = (s.campus || "").toLowerCase();
+                                const campus = (s.campus || "");
                                 const config = appState.programFees.find(p => {
                                   const pFilNorm = normalizeString(p.filiere);
                                   const sFilNorm = normalizeString(s.filiere || "");
-                                  const pC = p.campus.toLowerCase();
-                                  const sC = campus.toLowerCase();
+                                  const pC = p.campus;
+                                  const sC = campus;
 
-                                  const campusMatch = (sC === pC) ||
-                                                      (sC === "antsirabe" && pC === "ants") ||
-                                                      (sC === "ants" && pC === "antsirabe");
+                                  const campusMatch = isSameCampus(sC, pC);
 
                                   return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (s.niveau || "L1");
                                 });
@@ -889,7 +866,7 @@ export default function EtudiantsPage() {
                 const config = appState.programFees.find(p => {
                   const pFilNorm = normalizeString(p.filiere);
                   const sFilNorm = normalizeString(s.filiere || "");
-                  return p.campus.toLowerCase() === (s.campus || "").toLowerCase() &&
+                  return isSameCampus(s.campus || "", p.campus) &&
                          (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
                          p.niveau === (s.niveau || "L1");
                 });
@@ -1039,16 +1016,14 @@ export default function EtudiantsPage() {
                             ))}
                           </div>
                           {(() => {
-                            const campus = (profileStudent.campus || "").toLowerCase();
+                            const campus = (profileStudent.campus || "");
                             const config = appState.programFees.find(p => {
                               const pFilNorm = normalizeString(p.filiere);
                               const sFilNorm = normalizeString(profileStudent.filiere || "");
-                              const pC = p.campus.toLowerCase();
-                              const sC = campus.toLowerCase();
+                              const pC = p.campus;
+                              const sC = campus;
 
-                              const campusMatch = (sC === pC) ||
-                                                  (sC === "antsirabe" && pC === "ants") ||
-                                                  (sC === "ants" && pC === "antsirabe");
+                              const campusMatch = isSameCampus(sC, pC);
 
                               return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
                             });
@@ -1067,16 +1042,14 @@ export default function EtudiantsPage() {
                         <div className="px-4 py-6 text-center space-y-2">
                           <div className="text-slate-400 text-xs font-medium italic">Aucun dossier d&apos;écolage initialisé.</div>
                           {(() => {
-                            const campus = (profileStudent.campus || "").toLowerCase();
+                            const campus = (profileStudent.campus || "");
                             const config = appState.programFees.find(p => {
                               const pFilNorm = normalizeString(p.filiere);
                               const sFilNorm = normalizeString(profileStudent.filiere || "");
-                              const pC = p.campus.toLowerCase();
-                              const sC = campus.toLowerCase();
+                              const pC = p.campus;
+                              const sC = campus;
 
-                              const campusMatch = (sC === pC) ||
-                                                  (sC === "antsirabe" && pC === "ants") ||
-                                                  (sC === "ants" && pC === "antsirabe");
+                              const campusMatch = isSameCampus(sC, pC);
 
                               return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
                             });
@@ -1486,7 +1459,7 @@ export default function EtudiantsPage() {
                   {["L1", "L2", "L3", "M1", "M2"].map(niv => {
                     const feeKey = `${currentFiliere}:::${niv}`;
                     const fee = localFees[feeKey];
-                    const hasGlobalConfig = appState.programFees.some(p => p.campus === currentUser?.etablissement && p.filiere === currentFiliere && p.niveau === niv);
+                    const hasGlobalConfig = appState.programFees.some(p => isSameCampus(p.campus, currentUser?.etablissement || "") && p.filiere === currentFiliere && p.niveau === niv);
 
                     return (
                       <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all relative overflow-hidden">

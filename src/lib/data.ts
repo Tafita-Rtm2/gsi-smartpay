@@ -44,7 +44,7 @@ export const ETABLISSEMENTS: Record<Etablissement, { label: string; filieres: st
     ],
   },
   antsirabe: {
-    label: "GSI Antsirabe",
+    label: "GSI Internationale Antsirabe",
     color: "#7c3aed",
     filieres: [
       "Informatique & Conception Web",

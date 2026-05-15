@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Receipt, Download, Search, Eye, Printer, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchPaiements, fetchStudents, DBPaiement, DBStudent, getStudentId, formatMGA } from "@/lib/api";
+import { fetchPaiements, fetchStudents, DBPaiement, DBStudent, getStudentId, formatMGA, isSameCampus } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 
 export default function RecusPage() {
@@ -23,10 +23,10 @@ export default function RecusPage() {
     pays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     if (!isAdmin && currentUser) {
-      const myEtab = (currentUser.etablissement || "").toLowerCase();
+      const myEtab = (currentUser.etablissement || "");
       const myIds = new Set(studs.filter(s => {
-        const sC = (s.campus || "").toLowerCase();
-        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+        const sC = (s.campus || "");
+        return isSameCampus(sC, myEtab);
       }).map(s => getStudentId(s)));
       setPaiements(pays.filter(p => myIds.has(p.etudiantId)));
     } else {

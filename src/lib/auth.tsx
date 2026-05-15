@@ -4,7 +4,7 @@ import { User, Etablissement, generateId } from "@/lib/data";
 import {
   fetchStaff, createStaff, updateStaff, deleteStaff,
   fetchExpenses, createExpense, updateExpense, deleteExpense,
-  fetchFees, saveFee, saveFeesBulk, deleteFee, DBExpense, DBFee, DBStudent
+  fetchFees, saveFee, saveFeesBulk, deleteFee, DBExpense, DBFee, DBStudent, isSameCampus
 } from "@/lib/api";
 
 interface ProgramFee {
@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = currentUser?.role === "admin";
   const myExpenses = isAdmin
     ? appState.expenses
-    : appState.expenses.filter(e => (e.etablissement || "").toLowerCase().includes((currentUser?.etablissement || "").toLowerCase()));
+    : appState.expenses.filter(e => isSameCampus(e.etablissement || "", currentUser?.etablissement || ""));
 
   return (
     <AuthContext.Provider value={{

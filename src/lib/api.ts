@@ -386,6 +386,41 @@ export function getStudentName(s: DBStudent): string {
 export function getStudentCampus(s: DBStudent): string {
   return (s.campus || "").toLowerCase();
 }
+
+/**
+ * Compare two campuses by handling Antsirabe abbreviations
+ */
+export function isSameCampus(c1: string, c2: string): boolean {
+  const v1 = (c1 || "").toLowerCase();
+  const v2 = (c2 || "").toLowerCase();
+  if (v1 === v2) return true;
+  if ((v1 === "antsirabe" && v2 === "ants") || (v1 === "ants" && v2 === "antsirabe")) return true;
+  // Also handle cases where one might be a prefix of the other or contains it, but carefully
+  if (v1.startsWith(v2) || v2.startsWith(v1)) {
+     // Ensure we don't match "analakely" with "ants"
+     if (v1.startsWith("ants") && v2.startsWith("ants")) return true;
+  }
+  return false;
+}
+
+/**
+ * Normalizes strings for consistent comparison (removes accents, special chars, etc.)
+ */
+export function normalizeString(str: any) {
+  if (typeof str !== 'string') return "";
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[&]/g, " ")
+    .replace(/\bet\b/g, " ")
+    .replace(/hote(l+)erie/g, "hotellerie")
+    .replace(/voyage(s?)/g, "voyage")
+    .replace(/[^a-z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
 export function formatMGA(amount: number): string {

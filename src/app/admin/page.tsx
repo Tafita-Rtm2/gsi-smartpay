@@ -11,7 +11,7 @@ import {
   fetchStudents, fetchEcolages, fetchPaiements, fetchRequests,
   updateRequest, updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
   DBStudent, DBEcolage, DBPaiement, DBRequest,
-  getStudentId, getStudentName, calculateIntelligentStatus
+  getStudentId, getStudentName, calculateIntelligentStatus, isSameCampus
 } from "@/lib/api";
 import clsx from "clsx";
 import CustomModal from "@/components/CustomModal";
@@ -145,20 +145,20 @@ export default function AdminPage() {
                         (u.nom || "").toLowerCase().includes(q) ||
                         (u.prenom || "").toLowerCase().includes(q);
     const uEtab = u.etablissement || u.campus || "";
-    const matchEtab = filterEtab === "tous" || uEtab.toLowerCase().includes(filterEtab.toLowerCase());
+    const matchEtab = filterEtab === "tous" || isSameCampus(uEtab, filterEtab);
     return matchSearch && matchEtab;
   });
 
   const stats = ETAB_LIST.map(([id, info]) => {
-    const etabStudents = students.filter(s => (s.campus || "").toLowerCase().includes(id));
+    const etabStudents = students.filter(s => isSameCampus(s.campus || "", id));
     const etabIds = new Set(etabStudents.map(s => getStudentId(s)));
     const etabEcolages = ecolages.filter(e => etabIds.has(e.etudiantId));
     const etabPaiements = paiements.filter(p => etabIds.has(p.etudiantId));
     const totalDu = etabEcolages.reduce((s, e) => s + e.montantDu, 0);
     const totalPaye = etabPaiements.reduce((s, p) => s + p.montant, 0);
     const users = appState.users.filter(u => {
-      const ue = (u.etablissement || u.campus || "").toLowerCase();
-      return ue.includes(id) && u.role !== "admin";
+      const ue = (u.etablissement || u.campus || "");
+      return isSameCampus(ue, id) && u.role !== "admin";
     });
     const countPaye = etabEcolages.filter(e => e.statut === "paye").length;
     const countImpaye = etabStudents.length - countPaye;

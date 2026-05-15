@@ -2,25 +2,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, ChevronDown, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, Edit3, Upload, Eye } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA, calculateIntelligentStatus, getNextPaymentPeriod, MOIS } from "@/lib/api";
+import { fetchStudents, fetchPaiements, fetchEcolages, createPaiement, updateEcolage, updatePaiement, deletePaiement, DBStudent, DBPaiement, DBEcolage, getStudentId, getStudentName, formatMGA, calculateIntelligentStatus, getNextPaymentPeriod, MOIS, isSameCampus, normalizeString } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 import clsx from "clsx";
 import CustomModal from "@/components/CustomModal";
-
-function normalizeString(str: any) {
-  if (typeof str !== 'string') return "";
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[&]/g, " ")
-    .replace(/\bet\b/g, " ")
-    .replace(/hote(l+)erie/g, "hotellerie")
-    .replace(/voyage(s?)/g, "voyage")
-    .replace(/[^a-z0-9]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export default function PaiementsPage() {
   const { currentUser, appState } = useAuth();
@@ -98,10 +83,10 @@ export default function PaiementsPage() {
     try {
       const [p, s, e] = await Promise.all([fetchPaiements(), fetchStudents(), fetchEcolages()]);
       if (!isAdmin && currentUser) {
-        const myEtab = (currentUser.etablissement || "").toLowerCase();
+        const myEtab = (currentUser.etablissement || "");
         const myS = s.filter(st => {
-          const sC = (st.campus || "").toLowerCase();
-          return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+          const sC = (st.campus || "");
+          return isSameCampus(sC, myEtab);
         });
         const myIds = new Set(myS.map(st => getStudentId(st)));
         setPaiements(p.filter(pay => myIds.has(pay.etudiantId)));
@@ -166,18 +151,16 @@ export default function PaiementsPage() {
 
     // Auto-create ecolage if missing
     if (!ec) {
-      const campus = (selectedStudent.campus || "").toLowerCase();
+      const campus = (selectedStudent.campus || "");
       const sFiliere = selectedStudent.filiere || "";
       const sNiveau = selectedStudent.niveau || "L1";
       const config = appState.programFees.find(p => {
         const pFilNorm = normalizeString(p.filiere);
         const sFilNorm = normalizeString(sFiliere);
-        const pC = p.campus.toLowerCase();
-        const sC = campus.toLowerCase();
+        const pC = p.campus;
+        const sC = campus;
 
-        const campusMatch = (sC === pC) ||
-                            (sC === "antsirabe" && pC === "ants") ||
-                            (sC === "ants" && pC === "antsirabe");
+        const campusMatch = isSameCampus(sC, pC);
 
         return campusMatch &&
                (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&

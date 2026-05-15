@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { TrendingUp, TrendingDown, Percent, RefreshCw, Printer, FileText, Download, Users, CreditCard, ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS } from "@/lib/data";
-import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, formatMGA } from "@/lib/api";
+import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, formatMGA, isSameCampus } from "@/lib/api";
 
 type Tab = "resultat" | "impaye" | "recouvrement" | "impression";
 
@@ -35,7 +35,7 @@ export default function RapportsPage() {
     const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
     if (!isAdmin && currentUser) {
       const myEtab = currentUser.etablissement;
-      const myS = s.filter(st => (st.campus||"").toLowerCase().includes(myEtab));
+      const myS = s.filter(st => isSameCampus(st.campus || "", myEtab));
       const myIds = new Set(myS.map(st => getStudentId(st)));
       setStudents(myS); setEcolages(e.filter(ec=>myIds.has(ec.etudiantId))); setPaiements(p.filter(pay=>myIds.has(pay.etudiantId)));
     } else { setStudents(s); setEcolages(e); setPaiements(p); }
