@@ -186,10 +186,21 @@ app.use('/gsi-smartpay/api/db', async (req, res) => {
     // Isolation par Campus pour les non-admins (GET)
     if (req.method === "GET" && role !== "admin") {
       const collection = pathSuffix.split('/')[1];
-      const myEtab = (userSession.etablissement || "").toLowerCase();
+      const myEtab = (userSession.etablissement || "").toLowerCase().trim();
       const belongsToMe = (item) => {
-        const campus = (item.campus || item.etablissement || "").toLowerCase();
-        return campus.includes(myEtab) || campus.includes(myEtab.slice(0, 4));
+        const campus = (item.campus || item.etablissement || "").toLowerCase().trim();
+        if (!campus) return false;
+
+        // Handle Antsirabe specific matching
+        if (myEtab === "antsirabe" || myEtab === "ants") {
+           return campus.includes("antsirabe") || campus === "ants";
+        }
+        // Handle Analakely specific matching
+        if (myEtab === "analakely" || myEtab === "ana") {
+           return campus.includes("analakely") || campus === "ana";
+        }
+
+        return campus.includes(myEtab) || myEtab.includes(campus);
       };
       if (["users", "ecolage", "paiements", "expenses", "fees", "staff", "requests", "autres_paiements"].includes(collection)) {
         let listKey = "";

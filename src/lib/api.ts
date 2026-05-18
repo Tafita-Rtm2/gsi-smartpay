@@ -388,11 +388,12 @@ export function getStudentCampus(s: DBStudent): string {
 }
 
 /**
- * Compare two campuses by handling Antsirabe abbreviations
+ * Compare two campuses by handling Antsirabe abbreviations and labels
  */
 export function isSameCampus(c1: string, c2: string): boolean {
   const v1 = (c1 || "").toLowerCase().trim();
   const v2 = (c2 || "").toLowerCase().trim();
+  if (!v1 || !v2) return false;
   if (v1 === v2) return true;
 
   // Antsirabe special handling
@@ -404,6 +405,33 @@ export function isSameCampus(c1: string, c2: string): boolean {
   const isAna1 = v1.includes("analakely") || v1 === "ana";
   const isAna2 = v2.includes("analakely") || v2 === "ana";
   if (isAna1 && isAna2) return true;
+
+  // Other campuses: generic partial match
+  if (v1.includes(v2) || v2.includes(v1)) return true;
+
+  return false;
+}
+
+/**
+ * Compare two student levels robustly
+ */
+export function isSameLevel(l1: string, l2: string): boolean {
+  const v1 = (l1 || "L1").toLowerCase().trim();
+  const v2 = (l2 || "L1").toLowerCase().trim();
+  if (v1 === v2) return true;
+
+  // Handle common variations
+  const map: Record<string, string[]> = {
+    "l1": ["l1", "licence 1", "premiere annee"],
+    "l2": ["l2", "licence 2", "deuxieme annee"],
+    "l3": ["l3", "licence 3", "troisieme annee"],
+    "m1": ["m1", "master 1", "quatrieme annee"],
+    "m2": ["m2", "master 2", "cinquieme annee"],
+  };
+
+  for (const key in map) {
+    if (map[key].includes(v1) && map[key].includes(v2)) return true;
+  }
 
   return false;
 }

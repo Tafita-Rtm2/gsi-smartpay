@@ -14,7 +14,7 @@ import {
   updateEcolage, updatePaiement, deleteEcolage, deletePaiement,
   DBStudent, DBEcolage, DBPaiement,
   getStudentId, getStudentName, getStudentCampus, formatMGA, API_BASE,
-  calculateIntelligentStatus, getNextPaymentPeriod, MOIS, isSameCampus, normalizeString
+  calculateIntelligentStatus, getNextPaymentPeriod, MOIS, isSameCampus, normalizeString, isSameLevel
 } from "@/lib/api";
 import clsx from "clsx";
 import CustomModal from "@/components/CustomModal";
@@ -159,7 +159,7 @@ export default function EtudiantsPage() {
 
       return campusMatch &&
              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-             (p.niveau || "L1").trim() === (sNiveau || "L1").trim();
+             isSameLevel(p.niveau, sNiveau);
     });
 
     const realEc = getEcolage(s);
@@ -442,7 +442,7 @@ export default function EtudiantsPage() {
 
         return campusMatch &&
                (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-               (p.niveau || "L1").trim() === (sNiveau || "L1").trim();
+               isSameLevel(p.niveau, sNiveau);
       });
 
       if (config) {
@@ -767,7 +767,7 @@ export default function EtudiantsPage() {
 
                       return campusMatch &&
                              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-                             (p.niveau || "L1").trim() === (s.niveau || "L1").trim();
+                             isSameLevel(p.niveau, s.niveau || "L1");
                     });
                     return (
                       <tr key={getStudentId(s)} className="hover:bg-slate-50/60 transition-colors">
@@ -808,7 +808,7 @@ export default function EtudiantsPage() {
 
                                   const campusMatch = isSameCampus(sC, pC);
 
-                                  return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && (p.niveau || "L1").trim() === (s.niveau || "L1").trim();
+                                  return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && isSameLevel(p.niveau, s.niveau || "L1");
                                 });
                                 if (config && config.amount > 0) return <div className="text-[10px] font-black text-brand-500 uppercase tracking-tighter">Prévu: {formatMGA(config.amount)}</div>;
                                 return null;
@@ -868,7 +868,7 @@ export default function EtudiantsPage() {
                   const sFilNorm = normalizeString(s.filiere || "");
                   return isSameCampus(s.campus || "", p.campus) &&
                          (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-                         (p.niveau || "L1").trim() === (s.niveau || "L1").trim();
+                         isSameLevel(p.niveau, s.niveau || "L1");
                 });
                 return (
                   <div key={getStudentId(s)} className="p-4 space-y-2">
@@ -1025,7 +1025,7 @@ export default function EtudiantsPage() {
 
                               const campusMatch = isSameCampus(sC, pC);
 
-                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && (p.niveau || "L1").trim() === (profileStudent.niveau || "L1").trim();
+                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && isSameLevel(p.niveau, profileStudent.niveau || "L1");
                             });
                             if (config && config.amount > 0 && config.amount !== ec.montantDu) {
                               return (
@@ -1051,7 +1051,7 @@ export default function EtudiantsPage() {
 
                               const campusMatch = isSameCampus(sC, pC);
 
-                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && (p.niveau || "L1").trim() === (profileStudent.niveau || "L1").trim();
+                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && isSameLevel(p.niveau, profileStudent.niveau || "L1");
                             });
                             if (config && config.amount > 0) {
                               return (

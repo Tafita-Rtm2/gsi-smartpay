@@ -34,7 +34,7 @@ export default function Sidebar() {
     }
   }, [currentUser]);
 
-  const handleLogout = () => { logout(); router.push("/gsi-smartpay/"); };
+  const handleLogout = () => { logout(); router.push("/"); };
 
   const etabInfo = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
   const initials = currentUser ? `${currentUser.prenom[0]}${currentUser.nom[0]}`.toUpperCase() : "??";
