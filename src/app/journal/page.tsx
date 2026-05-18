@@ -2,24 +2,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, RefreshCw, Edit3, Trash2, Download, Printer, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { fetchPaiements, DBPaiement, DBExpense, formatMGA } from "@/lib/api";
+import { fetchPaiements, DBPaiement, DBExpense, formatMGA, isSameCampus, normalizeString } from "@/lib/api";
 import clsx from "clsx";
 import { ETABLISSEMENTS } from "@/lib/data";
 import CustomModal from "@/components/CustomModal";
 
 const CATEGORIES = ["Toutes", "Charges", "Materiel", "RH", "Autre"];
-
-function normalizeString(str: any) {
-  if (typeof str !== 'string') return "";
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/&/g, "et")
-    .replace(/[^a-z0-9]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export default function JournalPage() {
   const { myExpenses, addExpense, updateExpense, deleteExpense, currentUser } = useAuth();
@@ -73,10 +61,10 @@ export default function JournalPage() {
     try {
       const pays = await fetchPaiements();
       if (!isAdmin && currentUser) {
-        const myEtab = (currentUser.etablissement || "").toLowerCase();
+        const myEtab = (currentUser.etablissement || "");
         setPaiements(pays.filter(p => {
-          const sC = (p.campus || "").toLowerCase();
-          return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+          const sC = (p.campus || "");
+          return isSameCampus(sC, myEtab);
         }));
       } else {
         setPaiements(pays);

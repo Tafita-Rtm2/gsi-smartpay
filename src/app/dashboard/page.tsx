@@ -5,7 +5,7 @@ import { TrendingUp, Users, CreditCard, AlertCircle, CheckCircle2, Clock, ArrowR
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { ETABLISSEMENTS } from "@/lib/data";
-import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, formatMGA } from "@/lib/api";
+import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, formatMGA, isSameCampus } from "@/lib/api";
 
 const PIE_COLORS = ["#22c55e", "#ef4444", "#f59e0b"];
 
@@ -24,10 +24,10 @@ export default function DashboardPage() {
     setLoading(true);
     const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
     if (!isAdmin && currentUser) {
-      const myEtab = (currentUser.etablissement || "").toLowerCase();
+      const myEtab = (currentUser.etablissement || "");
       const myS = s.filter(st => {
-        const sC = (st.campus || "").toLowerCase();
-        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
+        const sC = (st.campus || "");
+        return isSameCampus(sC, myEtab);
       });
       const myIds = new Set(myS.map(st => getStudentId(st)));
       setStudents(myS);

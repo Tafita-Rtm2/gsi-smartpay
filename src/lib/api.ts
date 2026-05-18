@@ -351,7 +351,11 @@ export async function fetchFees(): Promise<DBFee[]> {
 
 export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | null> {
   const all = await fetchFees();
-  const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere && f.niveau === data.niveau);
+  const existing = all.find(f =>
+    isSameCampus(f.campus, data.campus) &&
+    normalizeString(f.filiere) === normalizeString(data.filiere) &&
+    isSameLevel(f.niveau, data.niveau)
+  );
   if (existing) {
     const id = existing.id || existing._id || "";
     await apiPatch("fees", id, data);
@@ -363,7 +367,11 @@ export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | 
 export async function saveFeesBulk(dataList: Omit<DBFee, "id" | "_id">[]): Promise<void> {
   const all = await fetchFees();
   for (const data of dataList) {
-    const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere && f.niveau === data.niveau);
+    const existing = all.find(f =>
+      isSameCampus(f.campus, data.campus) &&
+      normalizeString(f.filiere) === normalizeString(data.filiere) &&
+      isSameLevel(f.niveau, data.niveau)
+    );
     if (existing) {
       const id = existing.id || existing._id || "";
       await apiPatch("fees", id, data);
@@ -386,6 +394,74 @@ export function getStudentName(s: DBStudent): string {
 export function getStudentCampus(s: DBStudent): string {
   return (s.campus || "").toLowerCase();
 }
+
+/**
+ * Compare two campuses by handling Antsirabe abbreviations and labels
+ */
+export function isSameCampus(c1: string, c2: string): boolean {
+  const v1 = (c1 || "").toLowerCase().trim();
+  const v2 = (c2 || "").toLowerCase().trim();
+  if (!v1 || !v2) return false;
+  if (v1 === v2) return true;
+
+  // Antsirabe special handling
+  const isAnts1 = v1.includes("antsirabe") || v1 === "ants";
+  const isAnts2 = v2.includes("antsirabe") || v2 === "ants";
+  if (isAnts1 && isAnts2) return true;
+
+  // Analakely special handling
+  const isAna1 = v1.includes("analakely") || v1 === "ana";
+  const isAna2 = v2.includes("analakely") || v2 === "ana";
+  if (isAna1 && isAna2) return true;
+
+  // Other campuses: generic partial match
+  if (v1.includes(v2) || v2.includes(v1)) return true;
+
+  return false;
+}
+
+/**
+ * Compare two student levels robustly
+ */
+export function isSameLevel(l1: string, l2: string): boolean {
+  const v1 = (l1 || "L1").toLowerCase().trim();
+  const v2 = (l2 || "L1").toLowerCase().trim();
+  if (v1 === v2) return true;
+
+  // Handle common variations
+  const map: Record<string, string[]> = {
+    "l1": ["l1", "licence 1", "premiere annee"],
+    "l2": ["l2", "licence 2", "deuxieme annee"],
+    "l3": ["l3", "licence 3", "troisieme annee"],
+    "m1": ["m1", "master 1", "quatrieme annee"],
+    "m2": ["m2", "master 2", "cinquieme annee"],
+  };
+
+  for (const key in map) {
+    if (map[key].includes(v1) && map[key].includes(v2)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Normalizes strings for consistent comparison (removes accents, special chars, etc.)
+ */
+export function normalizeString(str: any) {
+  if (typeof str !== 'string') return "";
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[&]/g, " ")
+    .replace(/\bet\b/g, " ")
+    .replace(/hote(l+)erie/g, "hotellerie")
+    .replace(/voyage(s?)/g, "voyage")
+    .replace(/[^a-z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export const MOIS = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
 export function formatMGA(amount: number): string {

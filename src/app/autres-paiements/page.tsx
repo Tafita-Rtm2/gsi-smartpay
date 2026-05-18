@@ -4,7 +4,7 @@ import { Search, Plus, CreditCard, RefreshCw, X, Check, Trash2, AlertTriangle, D
 import { useAuth } from "@/lib/auth";
 import {
   fetchStudents, fetchOtherPayments, createOtherPayment, deleteOtherPayment,
-  DBStudent, DBOtherPayment, getStudentId, getStudentName, formatMGA
+  DBStudent, DBOtherPayment, getStudentId, getStudentName, formatMGA, isSameCampus
 } from "@/lib/api";
 import { ETABLISSEMENTS } from "@/lib/data";
 import clsx from "clsx";
@@ -79,7 +79,7 @@ export default function AutresPaiementsPage() {
       const [p, s] = await Promise.all([fetchOtherPayments(), fetchStudents()]);
       if (!isAdmin && currentUser) {
         const myEtab = currentUser.etablissement;
-        const myS = s.filter(st => (st.campus || "").toLowerCase().includes(myEtab));
+        const myS = s.filter(st => isSameCampus(st.campus || "", myEtab));
         const myIds = new Set(myS.map(st => getStudentId(st)));
         setPayments(p.filter(pay => myIds.has(pay.etudiantId)));
         setStudents(myS);
