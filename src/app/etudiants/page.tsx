@@ -1459,14 +1459,18 @@ export default function EtudiantsPage() {
                   {["L1", "L2", "L3", "M1", "M2"].map(niv => {
                     const feeKey = `${currentFiliere}:::${niv}`;
                     const fee = localFees[feeKey];
-                    const hasGlobalConfig = appState.programFees.some(p => isSameCampus(p.campus, currentUser?.etablissement || "") && p.filiere === currentFiliere && p.niveau === niv);
+                    const config = appState.programFees.find(p =>
+                      isSameCampus(p.campus, currentUser?.etablissement || "") &&
+                      normalizeString(p.filiere) === normalizeString(currentFiliere) &&
+                      isSameLevel(p.niveau, niv)
+                    );
 
                     return (
                       <div key={niv} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm group hover:border-brand-300 transition-all relative overflow-hidden">
-                        {(hasGlobalConfig || (fee && fee.amount > 0)) && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
+                        {(config || (fee && fee.amount > 0)) && <div className="absolute top-0 left-0 w-1 h-full bg-brand-500" />}
                         <div className="flex items-center justify-between mb-3">
                           <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Niveau {niv}</div>
-                          {hasGlobalConfig && (
+                          {config && (
                             <button onClick={async () => {
                               await deleteProgramFee(currentUser!.etablissement, currentFiliere, niv);
                               const updated = { ...localFees };

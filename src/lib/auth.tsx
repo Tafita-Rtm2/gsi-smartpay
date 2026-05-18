@@ -4,7 +4,7 @@ import { User, Etablissement, generateId } from "@/lib/data";
 import {
   fetchStaff, createStaff, updateStaff, deleteStaff,
   fetchExpenses, createExpense, updateExpense, deleteExpense,
-  fetchFees, saveFee, saveFeesBulk, deleteFee, DBExpense, DBFee, DBStudent, isSameCampus
+  fetchFees, saveFee, saveFeesBulk, deleteFee, DBExpense, DBFee, DBStudent, isSameCampus, normalizeString, isSameLevel
 } from "@/lib/api";
 
 interface ProgramFee {
@@ -168,7 +168,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProgramFeeInDb = async (campus: Etablissement, filiere: string, niveau: string) => {
     const all = await fetchFees();
-    const existing = all.find(f => f.campus === campus && f.filiere === filiere && f.niveau === niveau);
+    const existing = all.find(f =>
+      isSameCampus(f.campus, campus) &&
+      normalizeString(f.filiere) === normalizeString(filiere) &&
+      isSameLevel(f.niveau, niveau)
+    );
     if (existing) {
       const id = existing.id || existing._id || "";
       await deleteFee(id);

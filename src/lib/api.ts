@@ -351,7 +351,11 @@ export async function fetchFees(): Promise<DBFee[]> {
 
 export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | null> {
   const all = await fetchFees();
-  const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere && f.niveau === data.niveau);
+  const existing = all.find(f =>
+    isSameCampus(f.campus, data.campus) &&
+    normalizeString(f.filiere) === normalizeString(data.filiere) &&
+    isSameLevel(f.niveau, data.niveau)
+  );
   if (existing) {
     const id = existing.id || existing._id || "";
     await apiPatch("fees", id, data);
@@ -363,7 +367,11 @@ export async function saveFee(data: Omit<DBFee, "id" | "_id">): Promise<DBFee | 
 export async function saveFeesBulk(dataList: Omit<DBFee, "id" | "_id">[]): Promise<void> {
   const all = await fetchFees();
   for (const data of dataList) {
-    const existing = all.find(f => f.campus === data.campus && f.filiere === data.filiere && f.niveau === data.niveau);
+    const existing = all.find(f =>
+      isSameCampus(f.campus, data.campus) &&
+      normalizeString(f.filiere) === normalizeString(data.filiere) &&
+      isSameLevel(f.niveau, data.niveau)
+    );
     if (existing) {
       const id = existing.id || existing._id || "";
       await apiPatch("fees", id, data);
