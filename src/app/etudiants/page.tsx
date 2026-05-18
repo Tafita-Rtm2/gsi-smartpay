@@ -159,7 +159,7 @@ export default function EtudiantsPage() {
 
       return campusMatch &&
              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-             p.niveau === sNiveau;
+             (p.niveau || "L1").trim() === (sNiveau || "L1").trim();
     });
 
     const realEc = getEcolage(s);
@@ -442,7 +442,7 @@ export default function EtudiantsPage() {
 
         return campusMatch &&
                (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-               p.niveau === sNiveau;
+               (p.niveau || "L1").trim() === (sNiveau || "L1").trim();
       });
 
       if (config) {
@@ -767,7 +767,7 @@ export default function EtudiantsPage() {
 
                       return campusMatch &&
                              (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-                             p.niveau === (s.niveau || "L1");
+                             (p.niveau || "L1").trim() === (s.niveau || "L1").trim();
                     });
                     return (
                       <tr key={getStudentId(s)} className="hover:bg-slate-50/60 transition-colors">
@@ -808,7 +808,7 @@ export default function EtudiantsPage() {
 
                                   const campusMatch = isSameCampus(sC, pC);
 
-                                  return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (s.niveau || "L1");
+                                  return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && (p.niveau || "L1").trim() === (s.niveau || "L1").trim();
                                 });
                                 if (config && config.amount > 0) return <div className="text-[10px] font-black text-brand-500 uppercase tracking-tighter">Prévu: {formatMGA(config.amount)}</div>;
                                 return null;
@@ -868,7 +868,7 @@ export default function EtudiantsPage() {
                   const sFilNorm = normalizeString(s.filiere || "");
                   return isSameCampus(s.campus || "", p.campus) &&
                          (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) &&
-                         p.niveau === (s.niveau || "L1");
+                         (p.niveau || "L1").trim() === (s.niveau || "L1").trim();
                 });
                 return (
                   <div key={getStudentId(s)} className="p-4 space-y-2">
@@ -1025,7 +1025,7 @@ export default function EtudiantsPage() {
 
                               const campusMatch = isSameCampus(sC, pC);
 
-                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
+                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && (p.niveau || "L1").trim() === (profileStudent.niveau || "L1").trim();
                             });
                             if (config && config.amount > 0 && config.amount !== ec.montantDu) {
                               return (
@@ -1051,7 +1051,7 @@ export default function EtudiantsPage() {
 
                               const campusMatch = isSameCampus(sC, pC);
 
-                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && p.niveau === (profileStudent.niveau || "L1");
+                              return campusMatch && (pFilNorm.includes(sFilNorm) || sFilNorm.includes(pFilNorm)) && (p.niveau || "L1").trim() === (profileStudent.niveau || "L1").trim();
                             });
                             if (config && config.amount > 0) {
                               return (

@@ -391,15 +391,20 @@ export function getStudentCampus(s: DBStudent): string {
  * Compare two campuses by handling Antsirabe abbreviations
  */
 export function isSameCampus(c1: string, c2: string): boolean {
-  const v1 = (c1 || "").toLowerCase();
-  const v2 = (c2 || "").toLowerCase();
+  const v1 = (c1 || "").toLowerCase().trim();
+  const v2 = (c2 || "").toLowerCase().trim();
   if (v1 === v2) return true;
-  if ((v1 === "antsirabe" && v2 === "ants") || (v1 === "ants" && v2 === "antsirabe")) return true;
-  // Also handle cases where one might be a prefix of the other or contains it, but carefully
-  if (v1.startsWith(v2) || v2.startsWith(v1)) {
-     // Ensure we don't match "analakely" with "ants"
-     if (v1.startsWith("ants") && v2.startsWith("ants")) return true;
-  }
+
+  // Antsirabe special handling
+  const isAnts1 = v1.includes("antsirabe") || v1 === "ants";
+  const isAnts2 = v2.includes("antsirabe") || v2 === "ants";
+  if (isAnts1 && isAnts2) return true;
+
+  // Analakely special handling
+  const isAna1 = v1.includes("analakely") || v1 === "ana";
+  const isAna2 = v2.includes("analakely") || v2 === "ana";
+  if (isAna1 && isAna2) return true;
+
   return false;
 }
 
