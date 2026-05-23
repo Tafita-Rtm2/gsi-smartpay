@@ -4,8 +4,8 @@ const nextConfig = {
   // C'est parfait pour cPanel car cela évite toutes les erreurs "Module not found" liées à Next.js runtime.
   output: 'export',
 
-  // Le basePath est critique car l'URL est groupegsi.mg/gsi-smartpay/
-  basePath: '/gsi-smartpay',
+  // Le basePath est critique car l'URL est groupegsi.mg/formation/
+  basePath: '/formation',
 
   // trailingSlash: true est nécessaire pour que les dossiers statiques fonctionnent bien sur Apache
   trailingSlash: true,
