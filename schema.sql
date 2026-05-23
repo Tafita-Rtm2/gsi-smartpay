@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS user_modules (
     user_id INT,
     module_id INT,
     unlocked BOOLEAN DEFAULT FALSE,
+    progression INT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (module_id) REFERENCES modules(id)
 );
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS payments (
     user_id INT,
     module_id INT,
     reference VARCHAR(255),
-    proof_image VARCHAR(255),
+    proof_image LONGTEXT,
     status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
     amount DECIMAL(10, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS exams (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     pdf_url VARCHAR(255),
+    type ENUM('examen', 'devoir', 'exercice') DEFAULT 'examen',
     start_date DATETIME,
     end_date DATETIME,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
