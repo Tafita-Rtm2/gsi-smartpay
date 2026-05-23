@@ -1,4 +1,4 @@
-name: Build pour cPanel (Statique + API Express)
+name: Build and Release
 
 on:
   push:
@@ -7,43 +7,34 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
+    - uses: actions/checkout@v4
 
-      - name: Installation des dépendances
-        run: npm install
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
 
-      - name: Build de l'application (SÉCURISÉ)
-        # Bloque la création des Source Maps au niveau de Node/React/Angular
-        run: GENERATE_SOURCEMAP=false npm run build
+    - name: Install dependencies
+      run: npm install
 
-      - name: Organisation des fichiers et Nettoyage
-        run: |
-          mkdir -p deploy
+    - name: Build project
+      run: npm run build
 
-          # Supprime tous les fichiers .map par sécurité s'ils existent dans le dossier de build
-          # (Remplace "out" par "dist" si ton dossier de sortie s'appelle dist)
-          find out/ -name "*.map" -type f -delete
+    - name: Create artifact
+      run: |
+        mkdir -p deploy
+        cp -r out deploy/
+        cp -r public deploy/
+        cp server.js deploy/
+        cp package.json deploy/
+        cp package-lock.json deploy/
+        zip -r formation-build.zip deploy/
 
-          # 1. Copie le frontend statique (sans les fichiers de débogage)
-          cp -r out/* deploy/
-
-          # 2. Copie les fichiers serveurs essentiels
-          cp server.js deploy/server.js
-          cp package.json deploy/package.json
-
-          # 3. Copie le dossier public si existant
-          if [ -d "public" ]; then cp -r public deploy/public; fi
-
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gsi-smartpay-full
-          path: deploy/
-          include-hidden-files: false
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: formation-build
+        path: formation-build.zip

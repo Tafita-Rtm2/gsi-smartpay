@@ -1,218 +1,204 @@
-// GSI SmartPay - Serveur API Express pour cPanel
+// GSI Formation - Serveur API Express pour cPanel avec MySQL
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
-const axios = require('axios');
 const fs = require('fs');
-const https = require('https');
-
-const envPath = path.join(__dirname, '.env');
-if (fs.existsSync(envPath)) require('dotenv').config({ path: envPath });
-else require('dotenv').config();
+const mysql = require('mysql2/promise');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
-const SESSION_COOKIE = "gsi_secure_session";
+const SESSION_COOKIE = "gsi_formation_session";
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
-console.log('--- GSI SMARTPAY STARTUP ---');
-console.log(`[INIT] GSI_DATABASE_URL: ${process.env.GSI_DATABASE_URL ? 'OK' : 'MISSING'}`);
-console.log(`[INIT] GSI_ADMIN_PASSWORD: ${process.env.GSI_ADMIN_PASSWORD ? 'OK' : 'MISSING'}`);
+// Database connection pool
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+console.log('--- GSI FORMATION STARTUP ---');
+console.log(`[INIT] DB_HOST: ${process.env.DB_HOST ? 'OK' : 'MISSING'}`);
 console.log('----------------------------');
 
-// --- ROUTES AUTHENTIFICATION ---
-
-app.post('/gsi-smartpay/api/auth/login/', async (req, res) => {
-  const { username, password, etablissement } = req.body;
-  const API_BASE = (process.env.GSI_DATABASE_URL || "").trim().replace(/\/+$/, '');
-  if (!API_BASE) return res.status(500).json({ error: "API_BASE missing" });
-
-  try {
-    const url = `${API_BASE}/staff`;
-    const apiRes = await axios.get(url, {
-      headers: { "Accept": "application/json" },
-      httpsAgent: new https.Agent({ rejectUnauthorized: false })
-    });
-
-    const allStaff = Array.isArray(apiRes.data) ? apiRes.data : (apiRes.data.documents || apiRes.data.data || []);
-
-    const user = allStaff.find(u =>
-      u.username === username &&
-      u.password === password &&
-      u.actif !== false &&
-      (u.role === 'admin' || (u.etablissement || u.campus || "").toLowerCase().includes(etablissement.toLowerCase()))
-    );
-
-    if (!user) return res.status(401).json({ ok: false, error: "Identifiant, mot de passe ou campus incorrect" });
-
-    const userData = {
-      id: user.id || user._id,
-      role: user.role || 'agent',
-      etablissement: user.etablissement || user.campus || etablissement,
-      nom: user.nom, prenom: user.prenom
-    };
-
-    res.cookie(SESSION_COOKIE, JSON.stringify({ ...userData, ts: Date.now() }), {
-      httpOnly: true, secure: process.env.NODE_ENV === "production",
-      sameSite: "lax", maxAge: 60 * 60 * 24 * 1000, path: "/gsi-smartpay/",
-    });
-
-    return res.json({ ok: true, user: userData });
-  } catch (error) {
-    console.error("[LOGIN ERROR]", error.message);
-    return res.status(500).json({ error: "Erreur de connexion à la base de données" });
-  }
-});
-
-app.post('/gsi-smartpay/api/auth/admin/', (req, res) => {
-  const { password } = req.body;
-  const adminPwd = (process.env.GSI_ADMIN_PASSWORD || "").replace(/^["']|["']$/g, '').trim();
-  if (password === adminPwd) return res.json({ ok: true });
-  return res.status(401).json({ ok: false, error: "Mot de passe incorrect" });
-});
-
-app.post('/gsi-smartpay/api/auth/session/', (req, res) => {
-  const { user } = req.body;
-  if (!user) return res.status(400).json({ error: "User required" });
-  res.cookie(SESSION_COOKIE, JSON.stringify({ ...user, ts: Date.now() }), {
-    httpOnly: true, secure: process.env.NODE_ENV === "production",
-    sameSite: "lax", maxAge: 60 * 60 * 24 * 1000, path: "/gsi-smartpay/",
-  });
-  return res.json({ ok: true });
-});
-
-app.post('/gsi-smartpay/api/auth/logout/', (req, res) => {
-  res.clearCookie(SESSION_COOKIE, { path: "/gsi-smartpay/" });
-  return res.json({ ok: true });
-});
-
-app.get('/gsi-smartpay/api/auth/session/', (req, res) => {
-  const session = req.cookies[SESSION_COOKIE];
-  if (!session) return res.json({ authenticated: false });
-  try { return res.json({ authenticated: true, user: JSON.parse(session) }); }
-  catch { return res.json({ authenticated: false }); }
-});
-
-// --- PROXY API BASE DE DONNÉES ---
-
-app.use('/gsi-smartpay/api/db', async (req, res) => {
-  let API_BASE = process.env.GSI_DATABASE_URL;
-  if (!API_BASE) return res.status(500).json({ error: "Missing GSI_DATABASE_URL" });
-
-  API_BASE = API_BASE.trim().replace(/\/+$/, '');
-  const pathSuffix = req.url.split('?')[0].replace(/^\/*/, '/');
-  const finalUrl = `${API_BASE}${pathSuffix}`;
-
-  const sessionStr = req.cookies[SESSION_COOKIE];
-  if (!sessionStr) return res.status(401).json({ error: "Login required" });
-
-  let userSession;
-  try { userSession = JSON.parse(sessionStr); } catch (e) { return res.status(401).json({ error: "Invalid session" }); }
-
-  const { role } = userSession;
-
-  // LOG CRITIQUE POUR LES SUPPRESSIONS ET MODIFICATIONS (Écolage & Paiements)
-  const isSensitiveAction = (req.method === "DELETE" || req.method === "PATCH" || req.method === "PUT");
-  const collection = pathSuffix.split('/')[1];
-  const isSensitiveCollection = ["ecolage", "paiements"].includes(collection);
-
-  if (isSensitiveAction && isSensitiveCollection) {
-    console.log(`[SENSITIVE ACTION] Method: ${req.method}, Role: ${role}, Collection: ${collection}`);
-    if (role !== "admin") {
-      // EXCEPTION : On autorise le staff à mettre à jour l'état de l'écolage lors d'un paiement
-      // (montantPaye, statut, updatedAt, montantDu, montantMensuel)
-      const allowedFields = ["montantPaye", "statut", "updatedAt", "montantDu", "montantMensuel"];
-      const requestedFields = Object.keys(req.body || {});
-      const isTuitionUpdateOnly = collection === "ecolage" &&
-                                  req.method === "PATCH" &&
-                                  requestedFields.every(f => allowedFields.includes(f));
-
-      if (!isTuitionUpdateOnly) {
-        console.warn(`[ACTION BLOCKED] User ${userSession.id} (${role}) tried ${req.method} on ${collection} without admin rights.`);
-        return res.status(403).json({ error: "Approbation de l'administrateur requise pour cette action." });
-      }
-    }
-  } else if (req.method === "DELETE") {
-    // Garder la sécurité générique sur les suppressions pour les autres collections
-    // EXCEPTION: On autorise la suppression des configurations de frais (fees) par le staff
-    if (role !== "admin" && collection !== "fees") return res.status(403).json({ error: "Privilège Admin requis pour supprimer" });
-  }
-
-  // SUPPORT POUR LES MISES À JOUR GROUPÉES (BULK)
-  if (req.method === "POST" && pathSuffix === "/bulk") {
-    const { ops } = req.body; // ops: [{ method: "PATCH", collection: "ecolage", id: "...", data: {...} }]
-    if (!Array.isArray(ops)) return res.status(400).json({ error: "ops array required" });
-
-    const results = [];
-    for (const op of ops) {
-      try {
-        const opUrl = `${API_BASE}/${op.collection}/${op.id || ""}`.replace(/\/+$/, '');
-        const opConfig = {
-          method: op.method, url: opUrl, data: op.data,
-          headers: { "Accept": "application/json", "Content-Type": "application/json" },
-          timeout: 5000, httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-          validateStatus: () => true
-        };
-        const opRes = await axios(opConfig);
-        results.push({ status: opRes.status, data: opRes.data });
-      } catch (err) {
-        results.push({ status: 500, error: err.message });
-      }
-    }
-    return res.json({ results });
-  }
-
-  try {
-    const config = {
-      method: req.method, url: finalUrl, params: req.query,
-      headers: { "Accept": "application/json", "Content-Type": "application/json" },
-      timeout: 15000, httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-      validateStatus: () => true
-    };
-    if (["POST", "PATCH", "PUT"].includes(req.method)) config.data = req.body;
-
-    const apiRes = await axios(config);
-
-    // Si la suppression a échoué côté DB
-    if (req.method === "DELETE" && apiRes.status >= 400) {
-      console.error(`[DB DELETE FAILED] Status: ${apiRes.status}, Data:`, apiRes.data);
-    }
-
-    let data = apiRes.data;
-
-    // Isolation par Campus pour les non-admins (GET)
-    if (req.method === "GET" && role !== "admin") {
-      const collection = pathSuffix.split('/')[1];
-      const myEtab = (userSession.etablissement || "").toLowerCase();
-      const belongsToMe = (item) => {
-        const campus = (item.campus || item.etablissement || "").toLowerCase();
-        return campus.includes(myEtab) || campus.includes(myEtab.slice(0, 4));
-      };
-      if (["users", "ecolage", "paiements", "expenses", "fees", "staff", "requests", "autres_paiements"].includes(collection)) {
-        let listKey = "";
-        for (const key of ["documents", "data", "results", "items", "records", "list"]) {
-          if (Array.isArray(data[key])) { listKey = key; break; }
+// --- MIDDLEWARE AUTH ---
+const authenticate = (role) => {
+    return (req, res, next) => {
+        const session = req.cookies[SESSION_COOKIE];
+        if (!session) return res.status(401).json({ error: "Non authentifié" });
+        try {
+            const user = JSON.parse(session);
+            if (role && user.role !== role && user.role !== 'admin') {
+                return res.status(403).json({ error: "Accès refusé" });
+            }
+            req.user = user;
+            next();
+        } catch (e) {
+            return res.status(401).json({ error: "Session invalide" });
         }
-        if (listKey) data[listKey] = data[listKey].filter(belongsToMe);
-        else if (Array.isArray(data)) data = data.filter(belongsToMe);
-      }
+    };
+};
+
+// --- ROUTES AUTH ---
+
+app.post('/formation/api/auth/login', async (req, res) => {
+    const { email, password, filiere_id } = req.body;
+    try {
+        const [rows] = await pool.query('SELECT * FROM users WHERE email = ? AND password = ? AND (filiere_id = ? OR role IN ("admin", "staff"))', [email, password, filiere_id]);
+        if (rows.length === 0) return res.status(401).json({ error: "Identifiants incorrects ou filière non correspondante" });
+
+        const user = rows[0];
+        const userData = { id: user.id, email: user.email, role: user.role, filiere_id: user.filiere_id, full_name: user.full_name };
+
+        res.cookie(SESSION_COOKIE, JSON.stringify(userData), {
+            httpOnly: true, secure: process.env.NODE_ENV === "production",
+            sameSite: "lax", maxAge: 60 * 60 * 24 * 1000, path: "/formation/",
+        });
+        res.json({ ok: true, user: userData });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    return res.status(apiRes.status).json(data);
-  } catch (error) {
-    console.error(`[PROXY CRASH] ${req.method} ${finalUrl} :`, error.message);
-    return res.status(500).json({ error: error.message });
-  }
 });
 
-// --- FICHIERS STATIQUES ---
+app.post('/formation/api/auth/register', async (req, res) => {
+    const { full_name, email, password, filiere_id } = req.body;
+    try {
+        const [result] = await pool.query('INSERT INTO users (full_name, email, password, filiere_id, role) VALUES (?, ?, ?, ?, "student")', [full_name, email, password, filiere_id]);
+        res.json({ ok: true, id: result.insertId });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/formation/api/auth/prof-login', (req, res) => {
+    const { password } = req.body;
+    if (password === process.env.GSI_PROF_PASSWORD) {
+        const userData = { role: 'staff', full_name: 'Personnel GSI' };
+        res.cookie(SESSION_COOKIE, JSON.stringify(userData), {
+            httpOnly: true, secure: process.env.NODE_ENV === "production",
+            sameSite: "lax", maxAge: 60 * 60 * 24 * 1000, path: "/formation/",
+        });
+        return res.json({ ok: true });
+    }
+    res.status(401).json({ error: "Mot de passe incorrect" });
+});
+
+app.post('/formation/api/auth/admin-login', (req, res) => {
+    const { password } = req.body;
+    if (password === process.env.GSI_ADMIN_PASSWORD) {
+        const userData = { role: 'admin', full_name: 'Admin Nina' };
+        res.cookie(SESSION_COOKIE, JSON.stringify(userData), {
+            httpOnly: true, secure: process.env.NODE_ENV === "production",
+            sameSite: "lax", maxAge: 60 * 60 * 24 * 1000, path: "/formation/",
+        });
+        return res.json({ ok: true });
+    }
+    res.status(401).json({ error: "Mot de passe incorrect" });
+});
+
+app.post('/formation/api/auth/logout', (req, res) => {
+    res.clearCookie(SESSION_COOKIE, { path: "/formation/" });
+    res.json({ ok: true });
+});
+
+// --- MODULES & PAYMENTS ---
+
+app.get('/formation/api/modules', authenticate(), async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT m.*, um.unlocked
+            FROM modules m
+            LEFT JOIN user_modules um ON m.id = um.module_id AND um.user_id = ?
+            WHERE m.filiere_id = ?
+            ORDER BY m.module_number ASC
+        `, [req.user.id, req.user.filiere_id]);
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/formation/api/payments', authenticate('student'), async (req, res) => {
+    const { module_id, reference, proof_image, amount } = req.body;
+    try {
+        await pool.query('INSERT INTO payments (user_id, module_id, reference, proof_image, amount) VALUES (?, ?, ?, ?, ?)',
+            [req.user.id, module_id, reference, proof_image, amount]);
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- ADMIN: VALIDATE PAYMENTS ---
+app.get('/formation/api/admin/payments', authenticate('admin'), async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT p.*, u.full_name as student_name, m.module_number, f.name as filiere_name
+            FROM payments p
+            JOIN users u ON p.user_id = u.id
+            JOIN modules m ON p.module_id = m.id
+            JOIN filieres f ON m.filiere_id = f.id
+            WHERE p.status = 'pending'
+        `);
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/formation/api/admin/payments/:id/approve', authenticate('admin'), async (req, res) => {
+    const { id } = req.params;
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const [pRows] = await connection.query('SELECT * FROM payments WHERE id = ?', [id]);
+        const payment = pRows[0];
+
+        await connection.query('UPDATE payments SET status = "approved" WHERE id = ?', [id]);
+
+        // Unlock module for user
+        const [umRows] = await connection.query('SELECT * FROM user_modules WHERE user_id = ? AND module_id = ?', [payment.user_id, payment.module_id]);
+        if (umRows.length > 0) {
+            await connection.query('UPDATE user_modules SET unlocked = TRUE WHERE id = ?', [umRows[0].id]);
+        } else {
+            await connection.query('INSERT INTO user_modules (user_id, module_id, unlocked) VALUES (?, ?, TRUE)', [payment.user_id, payment.module_id]);
+        }
+
+        await connection.commit();
+        res.json({ ok: true });
+    } catch (error) {
+        await connection.rollback();
+        res.status(500).json({ error: error.message });
+    } finally {
+        connection.release();
+    }
+});
+
+// --- STAFF: MANAGE CONTENT ---
+app.post('/formation/api/staff/modules', authenticate('staff'), async (req, res) => {
+    const { filiere_id, module_number, subject1_name, subject1_pdf, subject2_name, subject2_pdf, price } = req.body;
+    try {
+        await pool.query('INSERT INTO modules (filiere_id, module_number, subject1_name, subject1_pdf, subject2_name, subject2_pdf, price) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [filiere_id, module_number, subject1_name, subject1_pdf, subject2_name, subject2_pdf, price]);
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Static files and Next.js handling
 const outPath = path.join(__dirname, 'out');
-app.use('/gsi-smartpay/', express.static(outPath));
-app.use('/gsi-smartpay', (req, res, next) => {
-  if (!req.url.includes('.')) return res.sendFile(path.join(outPath, 'index.html'));
-  next();
+app.use('/formation/', express.static(outPath));
+app.get('/formation/*', (req, res) => {
+    res.sendFile(path.join(outPath, 'index.html'));
 });
 
-app.listen(port, () => { console.log(`> GSI SmartPay prêt sur le port ${port}`); });
+app.listen(port, () => { console.log(`> GSI Formation prêt sur le port ${port}`); });

@@ -1,207 +1,156 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingUp, Users, CreditCard, AlertCircle, CheckCircle2, Clock, ArrowRight, RefreshCw } from "lucide-react";
+
+import { useState, useEffect } from "react";
+import { Book, FileText, BarChart, ClipboardList, User, Bell, LogOut, Lock, CheckCircle, HelpCircle } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth";
-import { ETABLISSEMENTS } from "@/lib/data";
-import { fetchStudents, fetchEcolages, fetchPaiements, DBStudent, DBEcolage, DBPaiement, getStudentId, formatMGA } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
-const PIE_COLORS = ["#22c55e", "#ef4444", "#f59e0b"];
+interface Module {
+  id: number;
+  module_number: number;
+  subject1_name: string;
+  price: number;
+  unlocked: boolean;
+}
 
-export default function DashboardPage() {
-  const { currentUser } = useAuth();
-  const [students,  setStudents]  = useState<DBStudent[]>([]);
-  const [ecolages,  setEcolages]  = useState<DBEcolage[]>([]);
-  const [paiements, setPaiements] = useState<DBPaiement[]>([]);
-  const [loading,   setLoading]   = useState(true);
+export default function StudentDashboard() {
+  const [activeTab, setActiveTab] = useState("modules");
+  const [modules, setModules] = useState<Module[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const etabInfo  = currentUser ? ETABLISSEMENTS[currentUser.etablissement] : null;
-  const isAdmin   = currentUser?.role === "admin";
-  const etabColor = etabInfo?.color || "#2563eb";
+  useEffect(() => {
+    const fetchModules = async () => {
+      try {
+        const res = await fetch("/formation/api/modules");
+        if (res.status === 401) return router.push("/");
+        const data = await res.json();
+        setModules(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [s, e, p] = await Promise.all([fetchStudents(), fetchEcolages(), fetchPaiements()]);
-    if (!isAdmin && currentUser) {
-      const myEtab = (currentUser.etablissement || "").toLowerCase();
-      const myS = s.filter(st => {
-        const sC = (st.campus || "").toLowerCase();
-        return sC === myEtab || (myEtab === "antsirabe" && sC === "ants") || (myEtab === "ants" && sC === "antsirabe");
-      });
-      const myIds = new Set(myS.map(st => getStudentId(st)));
-      setStudents(myS);
-      setEcolages(e.filter(ec => myIds.has(ec.etudiantId)));
-      setPaiements(p.filter(pay => myIds.has(pay.etudiantId)));
-    } else {
-      setStudents(s); setEcolages(e); setPaiements(p);
-    }
-    setLoading(false);
-  }, [isAdmin, currentUser]);
+    fetchModules();
+  }, [router]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // Real stats from DB only
-  const totalEncaisse = paiements.reduce((s, p) => s + p.montant, 0);
-  const totalDu       = ecolages.reduce((s, e) => s + e.montantDu, 0);
-  const totalImpaye   = Math.max(0, totalDu - ecolages.reduce((s, e) => s + e.montantPaye, 0));
-  const taux          = totalDu > 0 ? Math.round((totalEncaisse / totalDu) * 100) : 0;
-
-  const paid    = ecolages.filter(e => e.statut === "paye").length;
-  const unpaid  = ecolages.filter(e => e.statut === "impaye").length;
-  const pending = ecolages.filter(e => e.statut === "en_attente").length;
-
-  const pieData = [
-    { name: "Paye",       value: paid    },
-    { name: "Impaye",     value: unpaid  },
-    { name: "En attente", value: pending },
+  const tabs = [
+    { id: "modules", label: "Modules", icon: Book },
+    { id: "exercice", label: "Exercices", icon: FileText },
+    { id: "note", label: "Notes", icon: BarChart },
+    { id: "devoir", label: "Devoirs", icon: ClipboardList },
+    { id: "examen", label: "Examens", icon: HelpCircle },
+    { id: "profil", label: "Profil", icon: User },
   ];
 
-  const recentPaiements = [...paiements].reverse().slice(0, 5);
-
-  // Build monthly chart from real paiements
-  const monthlyMap: Record<string, number> = {};
-  paiements.forEach(p => {
-    const month = p.date ? p.date.slice(0, 7) : "?";
-    monthlyMap[month] = (monthlyMap[month] || 0) + p.montant;
-  });
-  const monthlyData = Object.entries(monthlyMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([mois, montant]) => ({ mois: mois.slice(5), montant }));
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tableau de bord</h1>
-          {etabInfo && <p className="text-sm font-medium mt-0.5" style={{ color: etabColor }}>{etabInfo.label}</p>}
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      {/* Sidebar Desktop */}
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r h-screen sticky top-0">
+        <div className="p-6 border-b">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center text-white font-bold">G</div>
+            <span className="font-bold text-xl tracking-tight">GSI Formation</span>
+          </div>
         </div>
-        <button onClick={load}
-          className="flex items-center gap-2 text-xs bg-white border border-slate-200 text-slate-500 px-3 py-1.5 rounded-full hover:bg-slate-50 transition-colors">
-          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-          {loading ? "Chargement..." : "Actualiser"}
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="py-20 text-center">
-          <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin mx-auto mb-4"
-            style={{ borderColor: etabColor, borderTopColor: "transparent" }} />
-          <p className="text-slate-400">Chargement des donnees...</p>
+        <nav className="flex-1 p-4 space-y-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition font-medium ${
+                activeTab === tab.id ? "bg-red-50 text-red-600" : "text-gray-600 hover:bg-gray-100"
+              }`}
+            >
+              <tab.icon size={20} />
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+        <div className="p-4 border-t">
+           <button onClick={() => router.push("/")} className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition">
+              <LogOut size={20} /> Déconnexion
+           </button>
         </div>
-      ) : (
-        <>
-          {/* Stat cards — only 3, no "impaye" card with negative icon */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {[
-              { label: "Total encaissé",     value: formatMGA(totalEncaisse), icon: TrendingUp,   color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
-              { label: "CA Annuel Prévu",    value: formatMGA(totalDu),       icon: CreditCard,   color: "text-brand-600",   bg: "bg-brand-50",   border: "border-brand-100"   },
-              { label: "Taux recouvrement",  value: `${taux}%`,               icon: CheckCircle2, color: "text-brand-600",   bg: "bg-brand-50",   border: "border-brand-100"   },
-              { label: "Total étudiants",    value: students.length.toString(),icon: Users,        color: "text-violet-600",  bg: "bg-violet-50",  border: "border-violet-100"  },
-              { label: "Transactions",       value: paiements.length.toString(),icon: CreditCard,  color: "text-slate-600",   bg: "bg-slate-50",   border: "border-slate-200"   },
-            ].map(({ label, value, icon: Icon, color, bg, border }) => (
-              <div key={label} className={`card border ${border}`}>
-                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mb-3`}>
-                  <Icon size={18} className={color} />
-                </div>
-                <div className="text-lg font-bold text-slate-900 truncate">{value}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{label}</div>
-              </div>
-            ))}
-          </div>
+      </aside>
 
-          {/* Alert row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { label: "Etudiants impayes",  value: unpaid,  icon: AlertCircle,  color: "text-red-600",     bg: "bg-red-50"     },
-              { label: "En attente",         value: pending, icon: Clock,        color: "text-amber-600",   bg: "bg-amber-50"   },
-              { label: "Ecolages payes",     value: paid,    icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" },
-            ].map(({ label, value, icon: Icon, color, bg }) => (
-              <div key={label} className="card flex items-center gap-4">
-                <div className={`w-11 h-11 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
-                  <Icon size={20} className={color} />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-slate-900">{value}</div>
-                  <div className="text-xs text-slate-500">{label}</div>
-                </div>
-              </div>
-            ))}
+      {/* Main Content */}
+      <main className="flex-1 pb-20 md:pb-0">
+        {/* Header mobile/desktop */}
+        <header className="bg-white border-b p-4 flex justify-between items-center sticky top-0 z-10">
+          <h2 className="text-xl font-bold text-gray-800 capitalize">{activeTab}</h2>
+          <div className="flex items-center gap-4">
+             <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
+                <Bell size={20} />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+             </button>
+             <div className="w-8 h-8 bg-gray-200 rounded-full border border-gray-300"></div>
           </div>
+        </header>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div className="card lg:col-span-2">
-              <h2 className="text-sm font-semibold text-slate-800 mb-4">Encaissements par mois (Ar)</h2>
-              {monthlyData.length === 0 ? (
-                <div className="h-[220px] flex items-center justify-center text-slate-300 text-sm">
-                  Aucune donnee de paiement
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={monthlyData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="mois" tick={{ fontSize: 11, fill: "#94a3b8" }} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => formatMGA(v)} />
-                    <Bar dataKey="montant" name="Encaisse" fill={etabColor} radius={[4,4,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-            <div className="card">
-              <h2 className="text-sm font-semibold text-slate-800 mb-4">Statuts ecolages</h2>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" paddingAngle={3}>
-                    {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-                  </Pie>
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+        <div className="p-4 md:p-8">
+           {activeTab === "modules" && (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {loading ? (
+                  Array(6).fill(0).map((_, i) => <div key={i} className="h-40 bg-gray-200 animate-pulse rounded-2xl"></div>)
+                ) : (
+                  modules.map((m, idx) => (
+                    <div key={m.id} className={`bg-white rounded-2xl p-6 border shadow-sm relative overflow-hidden ${!m.unlocked && idx > 0 && !modules[idx - 1]?.unlocked ? 'opacity-75' : ''}`}>
+                       <div className="flex justify-between items-start mb-4">
+                          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded">MODULE {m.module_number}</span>
+                          {m.unlocked ? (
+                            <CheckCircle className="text-green-500" size={24} />
+                          ) : (
+                            <Lock className="text-gray-400" size={24} />
+                          )}
+                       </div>
+                       <h3 className="font-bold text-lg mb-2">{m.subject1_name || "Matière à venir"}</h3>
+                       <p className="text-sm text-gray-500 mb-6 line-clamp-2">Accédez aux cours PDF et aux ressources pédagogiques de ce module.</p>
 
-          {/* Recent payments */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-800">Paiements recents</h2>
-              <Link href="/paiements" className="text-xs text-brand-600 hover:underline flex items-center gap-1">
-                Voir tout <ArrowRight size={12} />
-              </Link>
-            </div>
-            {recentPaiements.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-sm">Aucun paiement enregistre</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100">
-                      {["Reference", "Etudiant", "Montant", "Date", "Note", "Agent"].map(h => (
-                        <th key={h} className="text-left text-xs font-semibold text-slate-400 pb-2 pr-4">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentPaiements.map((p, i) => (
-                      <tr key={p.id || p._id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                        <td className="py-2.5 pr-4 font-mono text-xs text-slate-400">{p.reference || "—"}</td>
-                        <td className="py-2.5 pr-4 font-medium text-slate-800">{p.etudiantNom}</td>
-                        <td className="py-2.5 pr-4 font-bold text-emerald-700">{formatMGA(p.montant)}</td>
-                        <td className="py-2.5 pr-4 text-slate-500 text-xs">{p.date}</td>
-                        <td className="py-2.5 pr-4 text-slate-400 text-xs">{p.note || "—"}</td>
-                        <td className="py-2.5 text-slate-500 text-xs">{p.agentNom}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      )}
+                       {m.unlocked ? (
+                         <button className="w-full bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition">OUVRIR</button>
+                       ) : (
+                         <button className="w-full border-2 border-red-600 text-red-600 font-bold py-2 rounded-lg hover:bg-red-50 transition">DÉVERROUILLER ({m.price} Ar)</button>
+                       )}
+                    </div>
+                  ))
+                )}
+             </div>
+           )}
+
+           {activeTab !== "modules" && (
+             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                <div className="bg-gray-100 p-8 rounded-full mb-4">
+                   {tabs.find(t => t.id === activeTab)?.icon({ size: 48 })}
+                </div>
+                <p className="text-xl font-medium">Contenu de la section {activeTab} à venir.</p>
+             </div>
+           )}
+        </div>
+      </main>
+
+      {/* Floating Support Button */}
+      <button className="fixed bottom-24 right-6 md:bottom-8 md:right-8 bg-red-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition active:scale-95 z-20">
+         <HelpCircle size={24} />
+      </button>
+
+      {/* Navigation Mobile */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 z-10">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex flex-col items-center p-2 rounded-lg transition ${
+              activeTab === tab.id ? "text-red-600" : "text-gray-400"
+            }`}
+          >
+            <tab.icon size={20} />
+            <span className="text-[10px] mt-1 font-bold">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
